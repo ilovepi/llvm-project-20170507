@@ -29,6 +29,7 @@
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "clang/Driver/XRayArgs.h"
+#include "clang/Driver/SyringeArgs.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Option/ArgList.h"
@@ -4052,6 +4053,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   const XRayArgs &XRay = getToolChain().getXRayArgs();
   XRay.addArgs(getToolChain(), Args, CmdArgs, InputType);
 
+  const SyringeArgs &Syringe = getToolChain().getSyringeArgs();
+  Syringe.addArgs(getToolChain(), Args, CmdArgs, InputType);
+
   if (getToolChain().SupportsProfiling())
     Args.AddLastArg(CmdArgs, options::OPT_pg);
 
@@ -4323,6 +4327,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasArg(options::OPT_fno_inline))
     CmdArgs.push_back("-fno-inline");
+
+  if (Args.hasArg(options::OPT_fnosyringe))
+    CmdArgs.push_back("-fno-syringe");
+
+  if (Args.hasArg(options::OPT_fsyringe))
+    CmdArgs.push_back("-fsyringe");
 
   if (Arg* InlineArg = Args.getLastArg(options::OPT_finline_functions,
                                        options::OPT_finline_hint_functions,

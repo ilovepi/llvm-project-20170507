@@ -53,6 +53,7 @@
 #include "llvm/Support/YAMLTraits.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/Coroutines.h"
+#include "llvm/Transforms/Syringe.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -448,6 +449,7 @@ int main(int argc, char **argv) {
   initializeInstCombine(Registry);
   initializeAggressiveInstCombine(Registry);
   initializeInstrumentation(Registry);
+  initializeSyringeLegacyPassPass(Registry);
   initializeTarget(Registry);
   // For codegen passes, only passes that do IR to IR transformation are
   // supported.

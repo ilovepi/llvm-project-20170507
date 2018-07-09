@@ -47,6 +47,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Coroutines.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/Syringe.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/IPO/ThinLTOBitcodeWriter.h"
@@ -311,6 +312,21 @@ static void addEfficiencySanitizerPass(const PassManagerBuilder &Builder,
   else if (LangOpts.Sanitize.has(SanitizerKind::EfficiencyWorkingSet))
     Opts.ToolType = EfficiencySanitizerOptions::ESAN_WorkingSet;
   PM.add(createEfficiencySanitizerPass(Opts));
+}
+
+static void addSyringePass(const PassManagerBuilder &Builder,
+                                       legacy::PassManagerBase &PM) {
+  const PassManagerBuilderWrapper &BuilderWrapper =
+      static_cast<const PassManagerBuilderWrapper&>(Builder);
+  const LangOptions &LangOpts = BuilderWrapper.getLangOpts();
+  auto P = static_cast<SyringeLegacyPass*>(createSyringe());
+  auto FileList = LangOpts.SyringeConfigFiles;
+  for(auto& FileName : FileList)
+  {
+    P->parse(FileName);
+  }
+
+  PM.add(P);
 }
 
 static TargetLibraryInfoImpl *createTLII(llvm::Triple &TargetTriple,
@@ -655,6 +671,11 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     Options.InstrProfileOutput = CodeGenOpts.InstrProfileOutput;
     MPM.add(createInstrProfilingLegacyPass(Options));
   }
+
+  if (LangOpts.SyringeInject) {
+    addSyringePass(PMBuilder, MPM);
+  }
+
   if (CodeGenOpts.hasProfileIRInstr()) {
     PMBuilder.EnablePGOInstrGen = true;
     if (!CodeGenOpts.InstrProfileOutput.empty())

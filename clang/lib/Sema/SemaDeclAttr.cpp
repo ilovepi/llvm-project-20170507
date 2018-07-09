@@ -411,6 +411,17 @@ static void handleSimpleAttributeWithExclusions(Sema &S, Decl *D,
                                                                           AL);
 }
 
+/// Applies the Syringe Payload Attribute and sets the payload target string
+static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+  StringRef Model;
+  SourceLocation LiteralLoc;
+  if (!S.checkStringLiteralArgumentAttr(AL, 0, Model, &LiteralLoc))
+    return;
+
+  D->addAttr(::new (S.Context) SyringePayloadAttr(
+      AL.getRange(), S.Context, Model, AL.getAttributeSpellingListIndex()));
+}
+
 /// Check if the passed-in expression is of type int or bool.
 static bool isIntOrBool(Expr *Exp) {
   QualType QT = Exp->getType();
@@ -6603,6 +6614,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case ParsedAttr::AT_XRayLogArgs:
     handleXRayLogArgsAttr(S, D, AL);
+    break;
+  case ParsedAttr::AT_SyringeInjectionSite:
+    handleSimpleAttribute<SyringeInjectionSiteAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_SyringePayload:
+    handleSyringePayloadAttr(S, D, AL);
     break;
   }
 }

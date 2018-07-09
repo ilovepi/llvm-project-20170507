@@ -622,6 +622,19 @@ def Artificial : InheritableAttr {
   let Documentation = [ArtificialDocs];
 }
 
+def SyringeInjectionSite : InheritableAttr {
+  let Spellings = [Clang<"syringe_injection_site">];
+  let Subjects = SubjectList<[Function, ObjCMethod]>;
+  let Documentation = [SyringeDocs];
+}
+
+def SyringePayload : InheritableAttr {
+  let Spellings = [Clang<"syringe_payload">];
+  let Subjects = SubjectList<[Function, ObjCMethod]>;
+  let Args = [StringArgument<"SyringeTargetFunction">];
+  let Documentation = [SyringeDocs];
+}
+
 def XRayInstrument : InheritableAttr {
   let Spellings = [Clang<"xray_always_instrument">,
                    Clang<"xray_never_instrument">];

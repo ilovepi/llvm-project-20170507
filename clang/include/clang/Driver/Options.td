@@ -1135,6 +1135,23 @@ def fcf_protection : Flag<["-"], "fcf-protection">, Group<f_Group>, Flags<[CoreO
   Alias<fcf_protection_EQ>, AliasArgs<["full"]>,
   HelpText<"Enable cf-protection in 'full' mode">;
 
+def fsyringe : Flag<["-"], "fsyringe">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Generate stub functions and indirect calls for Syringe to perform behavior injection">;
+def fnosyringe : Flag<["-"], "fno-syringe">, Group<f_Group>,
+  Flags<[CC1Option]>;
+
+def fsyringe_link_deps : Flag<["-"], "fsyringe-link-deps">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Tells clang to add the link dependencies for Syringe.">;
+def fnosyringe_link_deps : Flag<["-"], "fnosyringe-link-deps">, Group<f_Group>,
+  Flags<[CC1Option]>;
+
+def fsyringe_config_file :
+  JoinedOrSeparate<["-"], "fsyringe-config-file=">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Filename defining Syringe Injeciton sites and payloads in YAML.">;
+
 def fxray_instrument : Flag<["-"], "fxray-instrument">, Group<f_Group>,
   Flags<[CC1Option]>,
   HelpText<"Generate XRay instrumentation sleds on function entry and exit">;

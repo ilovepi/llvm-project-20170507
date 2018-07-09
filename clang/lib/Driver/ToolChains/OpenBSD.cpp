@@ -181,6 +181,7 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   bool NeedsSanitizerDeps = addSanitizerRuntimes(ToolChain, Args, CmdArgs);
   bool NeedsXRayDeps = addXRayRuntime(ToolChain, Args, CmdArgs);
+  bool NeedsSyringeDeps = addSyringeRuntime(ToolChain, Args, CmdArgs);
   AddLinkerInputs(getToolChain(), Inputs, Args, CmdArgs, JA);
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
@@ -199,6 +200,10 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (NeedsXRayDeps) {
       CmdArgs.push_back(ToolChain.getCompilerRTArgString(Args, "builtins", false));
       linkXRayRuntimeDeps(ToolChain, CmdArgs);
+    }
+    if (NeedsSyringeDeps) {
+      CmdArgs.push_back(ToolChain.getCompilerRTArgString(Args, "builtins", false));
+      linkSyringeRuntimeDeps(ToolChain, CmdArgs);
     }
     // FIXME: For some reason GCC passes -lgcc before adding
     // the default system libraries. Just mimic this for now.

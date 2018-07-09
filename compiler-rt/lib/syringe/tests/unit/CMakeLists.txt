@@ -1,0 +1,2 @@
+add_syringe_unittest(SyringeRegistrationTest SOURCES
+  syringe_registration_test.cc syringe_unit_test_main.cc)

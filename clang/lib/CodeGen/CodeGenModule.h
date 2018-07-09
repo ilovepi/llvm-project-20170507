@@ -1189,6 +1189,11 @@ public:
   bool imbueXRayAttrs(llvm::Function *Fn, SourceLocation Loc,
                       StringRef Category = StringRef()) const;
 
+
+  /// Imbue Syringe attributes to a function.
+  /// Returns true if we did imbue attributes this way, false otherwise.
+  bool imbueSyringeAttrs(llvm::Function *Fn) const;
+
   SanitizerMetadata *getSanitizerMetadata() {
     return SanitizerMD.get();
   }

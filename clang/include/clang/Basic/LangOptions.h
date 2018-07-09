@@ -162,6 +162,12 @@ public:
   /// attribute(s).
   std::vector<std::string> XRayAttrListFiles;
 
+  /// Paths to the Syringe attribute list files, specifying which objects
+  /// (files, functions, variables) should be imbued with the appropriate Syringe
+  /// attribute(s).
+  std::vector<std::string> SyringeConfigFiles;
+
+
   clang::ObjCRuntime ObjCRuntime;
 
   std::string ObjCConstantStringClass;

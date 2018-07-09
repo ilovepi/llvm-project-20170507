@@ -171,6 +171,8 @@ enum Kind {
   kw_attributes,
   kw_allocsize,
   kw_alwaysinline,
+  kw_syringe_site,
+  kw_syringe_payload,
   kw_argmemonly,
   kw_sanitize_address,
   kw_sanitize_hwaddress,

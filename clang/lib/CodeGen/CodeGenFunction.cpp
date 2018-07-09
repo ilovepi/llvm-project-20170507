@@ -454,6 +454,12 @@ bool CodeGenFunction::ShouldXRayInstrumentFunction() const {
   return CGM.getCodeGenOpts().XRayInstrumentFunctions;
 }
 
+//// ShouldSyringeInject - Return true if the current function should use
+/// Syringe to modify runtime behavior.
+bool CodeGenFunction::ShouldSyringeInject() const {
+  return CGM.getCodeGenOpts().SyringeInjectBehaviors;
+}
+
 /// AlwaysEmitXRayCustomEvents - Return true if we should emit IR for calls to
 /// the __xray_customevent(...) builtin calls, when doing XRay instrumentation.
 bool CodeGenFunction::AlwaysEmitXRayCustomEvents() const {
@@ -900,6 +906,20 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   if (D && SanOpts.has(SanitizerKind::CFIUnrelatedCast)) {
     if (matchesStlAllocatorFn(D, getContext()))
       SanOpts.Mask &= ~SanitizerKind::CFIUnrelatedCast;
+  }
+
+  // Handle Syringe annotations
+  if (D && ShouldSyringeInject()) {
+    if (const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>()) {
+      Fn->addFnAttr("syringe-injection-site");
+    }
+
+    if (const auto *SyringeAttr = D->getAttr<SyringePayloadAttr>()) {
+      Fn->addFnAttr("syringe-payload");
+      auto fnName = SyringeAttr->getSyringeTargetFunction();
+      Fn->addFnAttr("syringe-target-function", fnName);
+    }
+
   }
 
   // Apply xray attributes to the function (as a string, for now)

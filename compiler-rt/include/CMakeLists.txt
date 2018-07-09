@@ -22,9 +22,20 @@ if (COMPILER_RT_BUILD_XRAY)
     xray/xray_log_interface.h)
 endif(COMPILER_RT_BUILD_XRAY)
 
+if (COMPILER_RT_BUILD_SYRINGE)
+  set(SYRINGE_HEADERS
+    syringe/injection_data.h
+    syringe/syringe_rt.h
+    syringe/syringe_rt_cxx.h
+    )
+endif(COMPILER_RT_BUILD_SYRINGE)
+
+
 set(COMPILER_RT_HEADERS
   ${SANITIZER_HEADERS}
-  ${XRAY_HEADERS})
+  ${XRAY_HEADERS}
+  ${SYRINGE_HEADERS}
+  )
 
 set(output_dir ${COMPILER_RT_OUTPUT_DIR}/include)
 
@@ -54,6 +65,12 @@ install(FILES ${XRAY_HEADERS}
   COMPONENT compiler-rt-headers
   PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
   DESTINATION ${COMPILER_RT_INSTALL_PATH}/include/xray)
+# Install syringe headers.
+install(FILES ${SYRINGE_HEADERS}
+  COMPONENT compiler-rt-headers
+  PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+  DESTINATION ${COMPILER_RT_INSTALL_PATH}/include/syringe)
+
 
 if (NOT CMAKE_CONFIGURATION_TYPES) # don't add this for IDEs.
   add_custom_target(install-compiler-rt-headers

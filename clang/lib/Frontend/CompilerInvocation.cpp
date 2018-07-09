@@ -856,7 +856,6 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
       Args.hasArg(OPT_finstrument_functions_after_inlining);
   Opts.InstrumentFunctionEntryBare =
       Args.hasArg(OPT_finstrument_function_entry_bare);
-
   Opts.XRayInstrumentFunctions =
       Args.hasArg(OPT_fxray_instrument);
   Opts.XRayAlwaysEmitCustomEvents =
@@ -865,6 +864,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
       Args.hasArg(OPT_fxray_always_emit_typedevents);
   Opts.XRayInstructionThreshold =
       getLastArgIntValue(Args, OPT_fxray_instruction_threshold_EQ, 200, Diags);
+  Opts.SyringeInjectBehaviors = Args.hasArg(OPT_fsyringe);
 
   auto XRayInstrBundles =
       Args.getAllArgValues(OPT_fxray_instrumentation_bundle);
@@ -2746,6 +2746,10 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.XRayNeverInstrumentFiles =
       Args.getAllArgValues(OPT_fxray_never_instrument);
   Opts.XRayAttrListFiles = Args.getAllArgValues(OPT_fxray_attr_list);
+
+  // -fsyringe
+  Opts.SyringeInject = Args.hasArg(OPT_fsyringe, OPT_fnosyringe, false);
+  Opts.SyringeConfigFiles = Args.getAllArgValues(OPT_fsyringe_config_file);
 
   // -fforce-emit-vtables
   Opts.ForceEmitVTables = Args.hasArg(OPT_fforce_emit_vtables);
