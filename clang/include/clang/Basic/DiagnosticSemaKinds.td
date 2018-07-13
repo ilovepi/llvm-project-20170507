@@ -6184,6 +6184,12 @@ def err_bad_cxx_cast_bitfield : Error<
 def err_bad_cxx_cast_qualifiers_away : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast}0 from %1 to %2 casts away qualifiers">;
+def ext_bad_cxx_cast_qualifiers_away_incoherent : ExtWarn<
+  "ISO C++ does not allow "
+  "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
+  "functional-style cast}0 from %1 to %2 because it casts away qualifiers, "
+  "even though the source and destination types are unrelated">,
+  SFINAEFailure, InGroup<DiagGroup<"cast-qual-unrelated">>;
 def err_bad_const_cast_dest : Error<
   "%select{const_cast||||C-style cast|functional-style cast}0 to %2, "
   "which is not a reference, pointer-to-object, or pointer-to-data-member">;
@@ -6487,6 +6493,8 @@ let CategoryName = "Lambda Issue" in {
     "lambda expression in an unevaluated operand">;
   def err_lambda_in_constant_expression : Error<
     "a lambda expression may not appear inside of a constant expression">;
+  def err_lambda_in_invalid_context : Error<
+    "a lambda expression cannot appear in this context">;
   def err_lambda_return_init_list : Error<
     "cannot deduce lambda return type from initializer list">;
   def err_lambda_capture_default_arg : Error<
@@ -8173,9 +8181,15 @@ def err_x86_builtin_invalid_rounding : Error<
   "invalid rounding argument">;
 def err_x86_builtin_invalid_scale : Error<
   "scale argument must be 1, 2, 4, or 8">;
+def err_hexagon_builtin_unsupported_cpu : Error<
+  "builtin is not supported on this CPU">;
+def err_hexagon_builtin_requires_hvx : Error<
+  "builtin requires HVX">;
+def err_hexagon_builtin_unsupported_hvx : Error<
+  "builtin is not supported on this version of HVX">;
+
 def err_builtin_target_unsupported : Error<
   "builtin is not supported on this target">;
-
 def err_builtin_longjmp_unsupported : Error<
   "__builtin_longjmp is not supported for the current target">;
 def err_builtin_setjmp_unsupported : Error<
@@ -9076,7 +9090,7 @@ def err_coroutine_promise_type_incomplete : Error<
   "this function cannot be a coroutine: %0 is an incomplete type">;
 def err_coroutine_type_missing_specialization : Error<
   "this function cannot be a coroutine: missing definition of "
-  "specialization %q0">;
+  "specialization %0">;
 def err_coroutine_promise_incompatible_return_functions : Error<
   "the coroutine promise type %0 declares both 'return_value' and 'return_void'">;
 def err_coroutine_promise_requires_return_function : Error<

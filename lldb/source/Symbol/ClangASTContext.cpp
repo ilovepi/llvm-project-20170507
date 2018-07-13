@@ -4166,6 +4166,8 @@ ClangASTContext::GetTypeClass(lldb::opaque_compiler_type_t type) {
     return lldb::eTypeClassArray;
   case clang::Type::DependentSizedExtVector:
     return lldb::eTypeClassVector;
+  case clang::Type::DependentVector:
+    return lldb::eTypeClassVector;
   case clang::Type::ExtVector:
     return lldb::eTypeClassVector;
   case clang::Type::Vector:
@@ -4900,6 +4902,7 @@ lldb::Encoding ClangASTContext::GetEncoding(lldb::opaque_compiler_type_t type,
   case clang::Type::ConstantArray:
     break;
 
+  case clang::Type::DependentVector:
   case clang::Type::ExtVector:
   case clang::Type::Vector:
     // TODO: Set this to more than one???
@@ -5102,6 +5105,7 @@ lldb::Encoding ClangASTContext::GetEncoding(lldb::opaque_compiler_type_t type,
         .GetEncoding(count);
   case clang::Type::DependentSizedArray:
   case clang::Type::DependentSizedExtVector:
+  case clang::Type::DependentVector:
   case clang::Type::UnresolvedUsing:
   case clang::Type::Attributed:
   case clang::Type::TemplateTypeParm:
@@ -5154,6 +5158,7 @@ lldb::Format ClangASTContext::GetFormat(lldb::opaque_compiler_type_t type) {
   case clang::Type::ConstantArray:
     return lldb::eFormatVoid; // no value
 
+  case clang::Type::DependentVector:
   case clang::Type::ExtVector:
   case clang::Type::Vector:
     break;
@@ -5268,6 +5273,7 @@ lldb::Format ClangASTContext::GetFormat(lldb::opaque_compiler_type_t type) {
         .GetFormat();
   case clang::Type::DependentSizedArray:
   case clang::Type::DependentSizedExtVector:
+  case clang::Type::DependentVector:
   case clang::Type::UnresolvedUsing:
   case clang::Type::Attributed:
   case clang::Type::TemplateTypeParm:

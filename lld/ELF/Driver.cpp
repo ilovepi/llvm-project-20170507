@@ -631,18 +631,16 @@ static void readCallGraph(MemoryBufferRef MB) {
   for (StringRef L : args::getLines(MB)) {
     SmallVector<StringRef, 3> Fields;
     L.split(Fields, ' ');
-    if (Fields.size() != 3)
-      fatal("parse error");
     uint64_t Count;
-    if (!to_integer(Fields[2], Count))
-      fatal("parse error");
+    if (Fields.size() != 3 || !to_integer(Fields[2], Count))
+      fatal(MB.getBufferIdentifier() + ": parse error");
     const Symbol *FromSym = SymbolNameToSymbol.lookup(Fields[0]);
     const Symbol *ToSym = SymbolNameToSymbol.lookup(Fields[1]);
     if (Config->WarnSymbolOrdering) {
       if (!FromSym)
-        warn("call graph file: no such symbol: " + Fields[0]);
+        warn(MB.getBufferIdentifier() + ": no such symbol: " + Fields[0]);
       if (!ToSym)
-        warn("call graph file: no such symbol: " + Fields[1]);
+        warn(MB.getBufferIdentifier() + ": no such symbol: " + Fields[1]);
     }
     if (!FromSym || !ToSym || Count == 0)
       continue;
@@ -1164,12 +1162,19 @@ static void excludeLibs(opt::InputArgList &Args) {
   DenseSet<StringRef> Libs = getExcludeLibs(Args);
   bool All = Libs.count("ALL");
 
-  for (InputFile *File : ObjectFiles)
+  auto Visit = [&](InputFile *File) {
     if (!File->ArchiveName.empty())
       if (All || Libs.count(path::filename(File->ArchiveName)))
         for (Symbol *Sym : File->getSymbols())
           if (!Sym->isLocal() && Sym->File == File)
             Sym->VersionId = VER_NDX_LOCAL;
+  };
+
+  for (InputFile *File : ObjectFiles)
+    Visit(File);
+
+  for (BitcodeFile *File : BitcodeFiles)
+    Visit(File);
 }
 
 // Force Sym to be entered in the output. Used for -u or equivalent.

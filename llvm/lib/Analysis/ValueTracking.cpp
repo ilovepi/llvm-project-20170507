@@ -1769,7 +1769,12 @@ bool isKnownToBeAPowerOfTwo(const Value *V, bool OrZero, unsigned Depth,
 /// Currently this routine does not support vector GEPs.
 static bool isGEPKnownNonNull(const GEPOperator *GEP, unsigned Depth,
                               const Query &Q) {
-  if (!GEP->isInBounds() || GEP->getPointerAddressSpace() != 0)
+  const Function *F = nullptr;
+  if (const Instruction *I = dyn_cast<Instruction>(GEP))
+    F = I->getFunction();
+
+  if (!GEP->isInBounds() ||
+      NullPointerIsDefined(F, GEP->getPointerAddressSpace()))
     return false;
 
   // FIXME: Support vector-GEPs.
@@ -4504,6 +4509,23 @@ static SelectPatternResult matchMinMax(CmpInst::Predicate Pred,
     return {Pred == CmpInst::ICMP_SGT ? SPF_SMAX : SPF_SMIN, SPNB_NA, false};
 
   return {SPF_UNKNOWN, SPNB_NA, false};
+}
+
+bool llvm::isKnownNegation(const Value *X, const Value *Y) {
+  assert(X && Y && "Invalid operand");
+
+  // X = sub (0, Y)
+  if (match(X, m_Neg(m_Specific(Y))))
+    return true;
+
+  // Y = sub (0, X)
+  if (match(Y, m_Neg(m_Specific(X))))
+    return true;
+
+  // X = sub (A, B), Y = sub (B, A)
+  Value *A, *B;
+  return match(X, m_Sub(m_Value(A), m_Value(B))) &&
+         match(Y, m_Sub(m_Specific(B), m_Specific(A)));
 }
 
 static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,

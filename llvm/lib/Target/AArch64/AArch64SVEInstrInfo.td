@@ -66,6 +66,14 @@ let Predicates = [HasSVE] in {
   defm ABS_ZPmZ  : sve_int_un_pred_arit_0<  0b110, "abs">;
   defm NEG_ZPmZ  : sve_int_un_pred_arit_0<  0b111, "neg">;
 
+  defm CLS_ZPmZ  : sve_int_un_pred_arit_1<   0b000, "cls">;
+  defm CLZ_ZPmZ  : sve_int_un_pred_arit_1<   0b001, "clz">;
+  defm CNT_ZPmZ  : sve_int_un_pred_arit_1<   0b010, "cnt">;
+  defm CNOT_ZPmZ : sve_int_un_pred_arit_1<   0b011, "cnot">;
+  defm NOT_ZPmZ  : sve_int_un_pred_arit_1<   0b110, "not">;
+  defm FABS_ZPmZ : sve_int_un_pred_arit_1_fp<0b100, "fabs">;
+  defm FNEG_ZPmZ : sve_int_un_pred_arit_1_fp<0b101, "fneg">;
+
   defm SMAX_ZPmZ : sve_int_bin_pred_arit_1<0b000, "smax">;
   defm UMAX_ZPmZ : sve_int_bin_pred_arit_1<0b001, "umax">;
   defm SMIN_ZPmZ : sve_int_bin_pred_arit_1<0b010, "smin">;
@@ -104,6 +112,18 @@ let Predicates = [HasSVE] in {
   // Select elements from either vector (predicated)
   defm SEL_ZPZZ    : sve_int_sel_vvv<"sel">;
 
+  defm COMPACT_ZPZ : sve_int_perm_compact<"compact">;
+  defm INSR_ZR : sve_int_perm_insrs<"insr">;
+  defm INSR_ZV : sve_int_perm_insrv<"insr">;
+
+  defm SUNPKLO_ZZ : sve_int_perm_unpk<0b00, "sunpklo">;
+  defm SUNPKHI_ZZ : sve_int_perm_unpk<0b01, "sunpkhi">;
+  defm UUNPKLO_ZZ : sve_int_perm_unpk<0b10, "uunpklo">;
+  defm UUNPKHI_ZZ : sve_int_perm_unpk<0b11, "uunpkhi">;
+
+  def  PUNPKLO_PP : sve_int_perm_punpk<0b0, "punpklo">;
+  def  PUNPKHI_PP : sve_int_perm_punpk<0b1, "punpkhi">;
+
   def AND_PPzPP   : sve_int_pred_log<0b0000, "and">;
   def BIC_PPzPP   : sve_int_pred_log<0b0001, "bic">;
   def EOR_PPzPP   : sve_int_pred_log<0b0010, "eor">;
@@ -119,6 +139,18 @@ let Predicates = [HasSVE] in {
   def ORNS_PPzPP  : sve_int_pred_log<0b1101, "orns">;
   def NORS_PPzPP  : sve_int_pred_log<0b1110, "nors">;
   def NANDS_PPzPP : sve_int_pred_log<0b1111, "nands">;
+
+  defm CLASTA_RPZ : sve_int_perm_clast_rz<0, "clasta">;
+  defm CLASTB_RPZ : sve_int_perm_clast_rz<1, "clastb">;
+  defm CLASTA_VPZ : sve_int_perm_clast_vz<0, "clasta">;
+  defm CLASTB_VPZ : sve_int_perm_clast_vz<1, "clastb">;
+  defm CLASTA_ZPZ : sve_int_perm_clast_zz<0, "clasta">;
+  defm CLASTB_ZPZ : sve_int_perm_clast_zz<1, "clastb">;
+
+  defm LASTA_RPZ : sve_int_perm_last_r<0, "lasta">;
+  defm LASTB_RPZ : sve_int_perm_last_r<1, "lastb">;
+  defm LASTA_VPZ : sve_int_perm_last_v<0, "lasta">;
+  defm LASTB_VPZ : sve_int_perm_last_v<1, "lastb">;
 
   // continuous load with reg+immediate
   defm LD1B_IMM    : sve_mem_cld_si<0b0000, "ld1b",  Z_b, ZPR8>;
