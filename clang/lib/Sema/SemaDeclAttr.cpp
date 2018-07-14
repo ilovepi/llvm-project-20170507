@@ -6604,6 +6604,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_XRayLogArgs:
     handleXRayLogArgsAttr(S, D, AL);
     break;
+  case ParsedAttr::AT_SyringeInjectionSite:
+    handleSimpleAttribute<SyringeInjectionSiteAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_SyringeInjectionPayload:
+    handleSimpleAttribute<SyringeInjectionPayloadAttr>(S, D, AL);
+    break;
   }
 }
 

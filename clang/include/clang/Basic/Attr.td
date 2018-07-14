@@ -622,6 +622,23 @@ def Artificial : InheritableAttr {
   let Documentation = [ArtificialDocs];
 }
 
+def SyringeInjectionSite : InheritableAttr {
+  let Spellings = [Clang<"syringe_injection_site">];
+  let Subjects = SubjectList<[Function, ObjCMethod]>;
+  let Accessors = [Accessor<"injectSyringe", [Clang<"syringe_injection_site">]>];
+  let Documentation = [SyringeDocs];
+}
+
+//FIXME: Args should probably be an enum instead of string
+def SyringeInjectionPayload : InheritableAttr {
+  let Spellings = [Clang<"syringe_injection_payload">];
+  let Subjects = SubjectList<[Function, ObjCMethod]>;
+  let Accessors = [Accessor<"createSyringePayload", [Clang<"syringe_injection_payload">]>];
+  let Args = [StringArgument<"EnableTrigger", 1>, StringArgument<"DisableTrigger", 1>];
+  let Documentation = [SyringeDocs];
+}
+
+
 def XRayInstrument : InheritableAttr {
   let Spellings = [Clang<"xray_always_instrument">,
                    Clang<"xray_never_instrument">];
