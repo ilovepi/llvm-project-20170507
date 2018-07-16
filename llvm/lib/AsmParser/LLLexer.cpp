@@ -628,6 +628,8 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(attributes);
 
   KEYWORD(alwaysinline);
+  KEYWORD(syringe_site);
+  KEYWORD(syringe_payload);
   KEYWORD(allocsize);
   KEYWORD(argmemonly);
   KEYWORD(builtin);
