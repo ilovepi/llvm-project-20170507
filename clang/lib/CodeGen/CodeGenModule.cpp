@@ -1980,6 +1980,12 @@ bool CodeGenModule::imbueXRayAttrs(llvm::Function *Fn, SourceLocation Loc,
   return true;
 }
 
+bool CodeGenModule::imbueSyringeAttrs(llvm::Function *Fn) const {
+  // FIXME: Check that Injeciton site and payload are mutually exclusive
+  Fn->addFnAttr(llvm::Attribute::SyringeInjectionSite);
+  return true;
+}
+
 bool CodeGenModule::MustBeEmitted(const ValueDecl *Global) {
   // Never defer when EmitAllDecls is specified.
   if (LangOpts.EmitAllDecls)

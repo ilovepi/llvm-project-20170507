@@ -249,6 +249,10 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "sanitize_hwaddress";
   if (hasAttribute(Attribute::AlwaysInline))
     return "alwaysinline";
+  if (hasAttribute(Attribute::SyringeInjectionSite))
+    return "syringe-site";
+  if (hasAttribute(Attribute::SyringePayload))
+    return "syringe-payload";
   if (hasAttribute(Attribute::ArgMemOnly))
     return "argmemonly";
   if (hasAttribute(Attribute::Builtin))

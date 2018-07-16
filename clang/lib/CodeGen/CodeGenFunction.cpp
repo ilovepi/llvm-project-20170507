@@ -902,6 +902,17 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       SanOpts.Mask &= ~SanitizerKind::CFIUnrelatedCast;
   }
 
+  // Handle Syringe annotations
+  if(D){
+    if (const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>()) {
+      Fn->addFnAttr(llvm::Attribute::SyringeInjectionSite);
+    }
+
+    if (const auto *SyringeAttr = D->getAttr<SyringePayloadAttr>()) {
+      Fn->addFnAttr(llvm::Attribute::SyringePayload);
+    }
+  }
+
   // Apply xray attributes to the function (as a string, for now)
   bool InstrumentXray = ShouldXRayInstrumentFunction() &&
                         CGM.getCodeGenOpts().XRayInstrumentationBundle.has(
