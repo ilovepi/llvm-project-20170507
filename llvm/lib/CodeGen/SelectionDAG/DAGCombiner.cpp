@@ -242,7 +242,8 @@ namespace {
     }
 
     bool SimplifyDemandedBits(SDValue Op, const APInt &Demanded);
-    bool SimplifyDemandedVectorElts(SDValue Op, const APInt &Demanded);
+    bool SimplifyDemandedVectorElts(SDValue Op, const APInt &Demanded,
+                                    bool AssumeSingleUse = false);
 
     bool CombineToPreIndexedLoadStore(SDNode *N);
     bool CombineToPostIndexedLoadStore(SDNode *N);
@@ -310,9 +311,9 @@ namespace {
     SDValue visitUMULO(SDNode *N);
     SDValue visitIMINMAX(SDNode *N);
     SDValue visitAND(SDNode *N);
-    SDValue visitANDLike(SDValue N0, SDValue N1, SDNode *LocReference);
+    SDValue visitANDLike(SDValue N0, SDValue N1, SDNode *N);
     SDValue visitOR(SDNode *N);
-    SDValue visitORLike(SDValue N0, SDValue N1, SDNode *LocReference);
+    SDValue visitORLike(SDValue N0, SDValue N1, SDNode *N);
     SDValue visitXOR(SDNode *N);
     SDValue SimplifyVBinOp(SDNode *N);
     SDValue visitSHL(SDNode *N);
@@ -392,8 +393,8 @@ namespace {
     SDValue visitFMULForFMADistributiveCombine(SDNode *N);
 
     SDValue XformToShuffleWithZero(SDNode *N);
-    SDValue ReassociateOps(unsigned Opc, const SDLoc &DL, SDValue LHS,
-                           SDValue RHS);
+    SDValue ReassociateOps(unsigned Opc, const SDLoc &DL, SDValue N0,
+                           SDValue N1);
 
     SDValue visitShiftByConstant(SDNode *N, ConstantSDNode *Amt);
 
@@ -431,14 +432,14 @@ namespace {
     SDValue BuildSDIV(SDNode *N);
     SDValue BuildSDIVPow2(SDNode *N);
     SDValue BuildUDIV(SDNode *N);
-    SDValue BuildLogBase2(SDValue Op, const SDLoc &DL);
+    SDValue BuildLogBase2(SDValue V, const SDLoc &DL);
     SDValue BuildReciprocalEstimate(SDValue Op, SDNodeFlags Flags);
     SDValue buildRsqrtEstimate(SDValue Op, SDNodeFlags Flags);
     SDValue buildSqrtEstimate(SDValue Op, SDNodeFlags Flags);
     SDValue buildSqrtEstimateImpl(SDValue Op, SDNodeFlags Flags, bool Recip);
-    SDValue buildSqrtNROneConst(SDValue Op, SDValue Est, unsigned Iterations,
+    SDValue buildSqrtNROneConst(SDValue Arg, SDValue Est, unsigned Iterations,
                                 SDNodeFlags Flags, bool Reciprocal);
-    SDValue buildSqrtNRTwoConst(SDValue Op, SDValue Est, unsigned Iterations,
+    SDValue buildSqrtNRTwoConst(SDValue Arg, SDValue Est, unsigned Iterations,
                                 SDNodeFlags Flags, bool Reciprocal);
     SDValue MatchBSwapHWordLow(SDNode *N, SDValue N0, SDValue N1,
                                bool DemandHighBits = true);
@@ -460,7 +461,7 @@ namespace {
     SDValue createBuildVecShuffle(const SDLoc &DL, SDNode *N,
                                   ArrayRef<int> VectorMask, SDValue VecIn1,
                                   SDValue VecIn2, unsigned LeftIdx);
-    SDValue matchVSelectOpSizesWithSetCC(SDNode *N);
+    SDValue matchVSelectOpSizesWithSetCC(SDNode *Cast);
 
     /// Walk up chain skipping non-aliasing memory nodes,
     /// looking for aliasing nodes and adding them to the Aliases vector.
@@ -519,8 +520,8 @@ namespace {
 
     /// Used by BackwardsPropagateMask to find suitable loads.
     bool SearchForAndLoads(SDNode *N, SmallPtrSetImpl<LoadSDNode*> &Loads,
-                           SmallPtrSetImpl<SDNode*> &NodeWithConsts,
-                           ConstantSDNode *Mask, SDNode *&UncombinedNode);
+                           SmallPtrSetImpl<SDNode*> &NodesWithConsts,
+                           ConstantSDNode *Mask, SDNode *&NodeToMask);
     /// Attempt to propagate a given AND node back to load leaves so that they
     /// can be combined into narrow loads.
     bool BackwardsPropagateMask(SDNode *N, SelectionDAG &DAG);
@@ -561,7 +562,7 @@ namespace {
     /// This optimization uses wide integers or vectors when possible.
     /// \return number of stores that were merged into a merged store (the
     /// affected nodes are stored as a prefix in \p StoreNodes).
-    bool MergeConsecutiveStores(StoreSDNode *N);
+    bool MergeConsecutiveStores(StoreSDNode *St);
 
     /// Try to transform a truncation where C is a constant:
     ///     (trunc (and X, C)) -> (and (trunc X), (trunc C))
@@ -1064,11 +1065,12 @@ bool DAGCombiner::SimplifyDemandedBits(SDValue Op, const APInt &Demanded) {
 /// Check the specified vector node value to see if it can be simplified or
 /// if things it uses can be simplified as it only uses some of the elements.
 /// If so, return true.
-bool DAGCombiner::SimplifyDemandedVectorElts(SDValue Op,
-                                             const APInt &Demanded) {
+bool DAGCombiner::SimplifyDemandedVectorElts(SDValue Op, const APInt &Demanded,
+                                             bool AssumeSingleUse) {
   TargetLowering::TargetLoweringOpt TLO(DAG, LegalTypes, LegalOperations);
   APInt KnownUndef, KnownZero;
-  if (!TLI.SimplifyDemandedVectorElts(Op, Demanded, KnownUndef, KnownZero, TLO))
+  if (!TLI.SimplifyDemandedVectorElts(Op, Demanded, KnownUndef, KnownZero, TLO,
+                                      0, AssumeSingleUse))
     return false;
 
   // Revisit the node.
@@ -8099,6 +8101,37 @@ static SDValue tryToFoldExtOfLoad(SelectionDAG &DAG, DAGCombiner &Combiner,
   return SDValue(N, 0); // Return N so it doesn't get rechecked!
 }
 
+static SDValue foldExtendedSignBitTest(SDNode *N, SelectionDAG &DAG,
+                                       bool LegalOperations) {
+  assert((N->getOpcode() == ISD::SIGN_EXTEND ||
+          N->getOpcode() == ISD::ZERO_EXTEND) && "Expected sext or zext");
+
+  SDValue SetCC = N->getOperand(0);
+  if (LegalOperations || SetCC.getOpcode() != ISD::SETCC ||
+      !SetCC.hasOneUse() || SetCC.getValueType() != MVT::i1)
+    return SDValue();
+
+  SDValue X = SetCC.getOperand(0);
+  SDValue Ones = SetCC.getOperand(1);
+  ISD::CondCode CC = cast<CondCodeSDNode>(SetCC.getOperand(2))->get();
+  EVT VT = N->getValueType(0);
+  EVT XVT = X.getValueType();
+  // setge X, C is canonicalized to setgt, so we do not need to match that
+  // pattern. The setlt sibling is folded in SimplifySelectCC() because it does
+  // not require the 'not' op.
+  if (CC == ISD::SETGT && isAllOnesConstant(Ones) && VT == XVT) {
+    // Invert and smear/shift the sign bit:
+    // sext i1 (setgt iN X, -1) --> sra (not X), (N - 1)
+    // zext i1 (setgt iN X, -1) --> srl (not X), (N - 1)
+    SDLoc DL(N);
+    SDValue NotX = DAG.getNOT(DL, X, VT);
+    SDValue ShiftAmount = DAG.getConstant(VT.getSizeInBits() - 1, DL, VT);
+    auto ShiftOpcode = N->getOpcode() == ISD::SIGN_EXTEND ? ISD::SRA : ISD::SRL;
+    return DAG.getNode(ShiftOpcode, DL, VT, NotX, ShiftAmount);
+  }
+  return SDValue();
+}
+
 SDValue DAGCombiner::visitSIGN_EXTEND(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   EVT VT = N->getValueType(0);
@@ -8223,6 +8256,9 @@ SDValue DAGCombiner::visitSIGN_EXTEND(SDNode *N) {
       }
     }
   }
+
+  if (SDValue V = foldExtendedSignBitTest(N, DAG, LegalOperations))
+    return V;
 
   if (N0.getOpcode() == ISD::SETCC) {
     SDValue N00 = N0.getOperand(0);
@@ -8509,6 +8545,9 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
   if (SDValue foldedExt = tryToFoldExtOfExtload(
           DAG, *this, TLI, VT, LegalOperations, N, N0, ISD::ZEXTLOAD))
     return foldedExt;
+
+  if (SDValue V = foldExtendedSignBitTest(N, DAG, LegalOperations))
+    return V;
 
   if (N0.getOpcode() == ISD::SETCC) {
     // Only do this before legalize for now.
@@ -14975,6 +15014,23 @@ SDValue DAGCombiner::visitEXTRACT_VECTOR_ELT(SDNode *N) {
       return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SDLoc(N), NVT, SVInVec,
                          DAG.getConstant(OrigElt, SDLoc(SVOp), IndexTy));
     }
+  }
+
+  // If only EXTRACT_VECTOR_ELT nodes use the source vector we can
+  // simplify it based on the (valid) extraction indices.
+  if (llvm::all_of(InVec->uses(), [&](SDNode *Use) {
+        return Use->getOpcode() == ISD::EXTRACT_VECTOR_ELT &&
+               Use->getOperand(0) == InVec &&
+               isa<ConstantSDNode>(Use->getOperand(1));
+      })) {
+    APInt DemandedElts = APInt::getNullValue(VT.getVectorNumElements());
+    for (SDNode *Use : InVec->uses()) {
+      auto *CstElt = cast<ConstantSDNode>(Use->getOperand(1));
+      if (CstElt->getAPIntValue().ult(VT.getVectorNumElements()))
+        DemandedElts.setBit(CstElt->getZExtValue());
+    }
+    if (SimplifyDemandedVectorElts(InVec, DemandedElts, true))
+      return SDValue(N, 0);
   }
 
   bool BCNumEltsChanged = false;
