@@ -26,14 +26,15 @@ public:
   bool doBehaviorInjectionForModule(Module &M)
   {
       bool ret = false;
-      for(auto fn_it = M.begin(); fn_it != M.end(); fn_it++)
+      for(Function& F : M)
       {
-          if(fn_it->hasFnAttribute(Attribute::SyringeInjectionSite))
+          if(F.hasFnAttribute(Attribute::SyringeInjectionSite))
           {
               ret= true;
               //create global function pointer
               auto globals = M.getGlobalList();
               GlobalValue gv(type, valuety, use, numops, linkage, name,addrsapce);
+              globals.emplace_back()
               //clone function
               //replace original body w/ indirect call
           }
