@@ -23,26 +23,29 @@ public:
     return doBehaviorInjectionForModule(M);
   }
 
-  bool doBehaviorInjectionForModule(Module &M)
-  {
-      bool ret = false;
-      for(Function& F : M)
-      {
-          if(F.hasFnAttribute(Attribute::SyringeInjectionSite))
-          {
-              ret= true;
-              //create global function pointer
-              auto globals = M.getGlobalList();
-              GlobalValue gv(type, valuety, use, numops, linkage, name,addrsapce);
-              globals.emplace_back()
-              //clone function
-              //replace original body w/ indirect call
-          }
+  bool doBehaviorInjectionForModule(Module &M) {
+    bool ret = false;
+    for (Function &F : M) {
+      if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
+        ret = true;
+        // create global function pointer
+        auto globals = M.getGlobalList();
+        auto SyringeName = F.getFunctionName() + "_syringe_ptr";
+        auto GV =
+            GlobalVariable(M, F.getFunctionType(),
+                           /*isConstant*/ false, GlobalValue::ExternalLinkage,
+                           /*init*/ nullptr, namek,
+                           /*insertbefore*/ nullptr, GV.getThreadLocalMode(),
+                           GV.getType()->getAddressSpace());
+
+        GlobalValue gv(type, valuety, use, numops, linkage, name, addrsapce);
+        globals.emplace_back()
+        // clone function
+        // replace original body w/ indirect call
       }
+    }
 
-
-
-      return ret;
+    return ret;
   }
 
 private:
