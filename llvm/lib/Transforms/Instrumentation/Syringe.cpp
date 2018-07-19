@@ -28,6 +28,7 @@ public:
     for (Function &F : M) {
       if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
         ret = true;
+
         // create global function pointer
         auto globals = M.getGlobalList();
         auto SyringeName = F.getFunctionName() + "_syringe_ptr";
