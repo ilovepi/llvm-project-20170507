@@ -448,6 +448,7 @@ int main(int argc, char **argv) {
   initializeInstCombine(Registry);
   initializeAggressiveInstCombine(Registry);
   initializeInstrumentation(Registry);
+  initializeSyringe(Registry);
   initializeTarget(Registry);
   // For codegen passes, only passes that do IR to IR transformation are
   // supported.
