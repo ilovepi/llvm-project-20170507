@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Syringe/Syringe.h"
+#include "llvm/Transforms/Syringe.h"
 #include "llvm-c/Initialization.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/PassRegistry.h"
@@ -56,6 +56,7 @@ bool Syringe::runOnModule(Module &M) {
 
 /// create funciton stub for behavior injection
 bool Syringe::doBehaviorInjectionForModule(Module &M) {
+  errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
   for (Function &F : M) {
     if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
