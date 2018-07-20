@@ -250,9 +250,9 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
   if (hasAttribute(Attribute::AlwaysInline))
     return "alwaysinline";
   if (hasAttribute(Attribute::SyringeInjectionSite))
-    return "syringesite";
+    return "syringe-site";
   if (hasAttribute(Attribute::SyringePayload))
-    return "syringepayload";
+    return "syringe-payload";
   if (hasAttribute(Attribute::ArgMemOnly))
     return "argmemonly";
   if (hasAttribute(Attribute::Builtin))
