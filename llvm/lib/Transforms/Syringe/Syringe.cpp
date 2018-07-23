@@ -65,7 +65,8 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // clone function
       // TODO: Decide if this nullptr should be a VMap
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
-      cloneDecl->setName(F.getName() + "_syringe_impl");
+      //cloneDecl->setName(F.getName() + "_syringe_impl");
+      cloneDecl->setName("_Z18hello_syringe_implv");
       orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
       cloneDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
 
@@ -73,14 +74,15 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // cloneFunc->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
       // cloneFunc->setName(F.getName() + "_syringe_impl");
 
-       auto injected = M.getFunction("_Z8injectedv");
-       if (!injected)
-       errs() << "Injected function didn't exist!\n";
+       //auto injected = M.getFunction("_Z8injectedv");
+       //if (!injected)
+       //errs() << "Injected function didn't exist!\n";
 
       // create impl pointer
       // orc::moveFunctionBody(F, cloneDecl, );
       auto SyringePtr = orc::createImplPointer(
-          *F.getType(), M, "_ZL17hello_syringe_ptr", cloneDecl);
+          //*F.getType(), M, "_ZL17hello_syringe_ptr", cloneDecl);
+          *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
 
       // create stub body for original call
@@ -90,32 +92,6 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
     } else if (F.hasFnAttribute(Attribute::SyringePayload)) {
       errs() << "Found Syringe Payload\n";
       continue;
-
-      ret = true;
-      ValueToValueMapTy VMap;
-
-      // clone function
-      // TODO: Decide if this nullptr should be a VMap
-      auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
-      cloneDecl->setName(F.getName() + "_syringe_impl");
-      orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
-      cloneDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
-
-      // auto *cloneFunc = CloneFunction(&F, VMap);
-      // cloneFunc->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
-      // cloneFunc->setName(F.getName() + "_syringe_impl");
-
-      auto injected = M.getFunction("_Z8injectedv");
-      if (!injected)
-        errs() << "Injected function didn't exist!\n";
-
-      // create impl pointer
-      // orc::moveFunctionBody(F, cloneDecl, );
-      auto SyringePtr = orc::createImplPointer(
-          *F.getType(), M, F.getName() + "_syringe_ptr", injected);
-
-      // create stub body for original call
-      orc::makeStub(F, *SyringePtr);
     }
   }
 
