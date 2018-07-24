@@ -65,6 +65,9 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // clone function
       // TODO: Decide if this nullptr should be a VMap
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
+      auto mangledFuncName = F.getName();
+      errs() << "Mangled Name: " << mangledFuncName << "\n";
+
       //cloneDecl->setName(F.getName() + "_syringe_impl");
       cloneDecl->setName("_Z18hello_syringe_implv");
       orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
@@ -82,7 +85,7 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // orc::moveFunctionBody(F, cloneDecl, );
       auto SyringePtr = orc::createImplPointer(
           //*F.getType(), M, "_ZL17hello_syringe_ptr", cloneDecl);
-          *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
+          *F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
 
       // create stub body for original call
