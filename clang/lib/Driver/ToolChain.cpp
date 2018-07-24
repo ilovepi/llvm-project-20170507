@@ -21,6 +21,7 @@
 #include "clang/Driver/Job.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
+#include "clang/Driver/SyringeArgs.h"
 #include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
@@ -114,6 +115,12 @@ const XRayArgs& ToolChain::getXRayArgs() const {
   if (!XRayArguments.get())
     XRayArguments.reset(new XRayArgs(*this, Args));
   return *XRayArguments.get();
+}
+
+const SyringeArgs& ToolChain::getSyringeArgs() const {
+  if (!SyringeArguments.get())
+    SyringeArguments.reset(new SyringeArgs(*this, Args));
+  return *SyringeArguments.get();
 }
 
 namespace {
@@ -564,7 +571,7 @@ std::string ToolChain::ComputeLLVMTriple(const ArgList &Args,
     StringRef Suffix =
       tools::arm::getLLVMArchSuffixForARM(CPU, MArch, Triple);
     bool IsMProfile = ARM::parseArchProfile(Suffix) == ARM::ProfileKind::M;
-    bool ThumbDefault = IsMProfile || (ARM::parseArchVersion(Suffix) == 7 && 
+    bool ThumbDefault = IsMProfile || (ARM::parseArchVersion(Suffix) == 7 &&
                                        getTriple().isOSBinFormatMachO());
     // FIXME: this is invalid for WindowsCE
     if (getTriple().isOSWindows())

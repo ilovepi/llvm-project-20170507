@@ -55,6 +55,7 @@ class InputInfo;
 class SanitizerArgs;
 class Tool;
 class XRayArgs;
+class SyringeArgs;
 
 /// Helper structure used to pass information extracted from clang executable
 /// name such as `i686-linux-android-g++`.
@@ -135,6 +136,7 @@ private:
 
   mutable std::unique_ptr<SanitizerArgs> SanitizerArguments;
   mutable std::unique_ptr<XRayArgs> XRayArguments;
+  mutable std::unique_ptr<SyringeArgs> SyringeArguments;
 
   /// The effective clang triple for the current Job.
   mutable llvm::Triple EffectiveTriple;
@@ -224,6 +226,8 @@ public:
   const SanitizerArgs& getSanitizerArgs() const;
 
   const XRayArgs& getXRayArgs() const;
+
+  const SyringeArgs& getSyringeArgs() const;
 
   // Returns the Arg * that explicitly turned on/off rtti, or nullptr.
   const llvm::opt::Arg *getRTTIArg() const { return CachedRTTIArg; }

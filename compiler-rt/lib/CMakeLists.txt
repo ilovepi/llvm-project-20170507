@@ -49,9 +49,9 @@ if(COMPILER_RT_BUILD_XRAY)
   compiler_rt_build_runtime(xray)
 endif()
 
-#if(COMPILER_RT_BUILD_SYRINGE)
+if(COMPILER_RT_BUILD_SYRINGE)
   compiler_rt_build_runtime(syringe)
-#endif()
+endif()
 
 if(COMPILER_RT_BUILD_LIBFUZZER)
   compiler_rt_build_runtime(fuzzer)
