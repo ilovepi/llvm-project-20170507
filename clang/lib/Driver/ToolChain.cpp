@@ -21,6 +21,7 @@
 #include "clang/Driver/Job.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
+#include "clang/Driver/SyringeArgs.h"
 #include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
@@ -114,6 +115,12 @@ const XRayArgs& ToolChain::getXRayArgs() const {
   if (!XRayArguments.get())
     XRayArguments.reset(new XRayArgs(*this, Args));
   return *XRayArguments.get();
+}
+
+const SyringeArgs& ToolChain::getSyringeArgs() const {
+  if (!SyringeArguments.get())
+    SyringeArguments.reset(new SyringeArgs(*this, Args));
+  return *SyringeArguments.get();
 }
 
 namespace {

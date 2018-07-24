@@ -1141,6 +1141,12 @@ def fsyringe : Flag<["-"], "fsyringe">, Group<f_Group>,
 def fnosyringe : Flag<["-"], "fno-syringe">, Group<f_Group>,
   Flags<[CC1Option]>;
 
+def fsyringe_link_deps : Flag<["-"], "fsyringe-link-deps">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Tells clang to add the link dependencies for XRay.">;
+def fnosyringe_link_deps : Flag<["-"], "fnosyringe-link-deps">, Group<f_Group>,
+  Flags<[CC1Option]>;
+
 def fxray_instrument : Flag<["-"], "fxray-instrument">, Group<f_Group>,
   Flags<[CC1Option]>,
   HelpText<"Generate XRay instrumentation sleds on function entry and exit">;

@@ -85,7 +85,8 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // orc::moveFunctionBody(F, cloneDecl, );
       auto SyringePtr = orc::createImplPointer(
           //*F.getType(), M, "_ZL17hello_syringe_ptr", cloneDecl);
-          *F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
+          *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
+          //*F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
 
       // create stub body for original call
