@@ -43,7 +43,34 @@ if (TARGET cxx-headers OR HAVE_LIBCXX)
 endif()
 
 if (APPLE)
-    # do nothing for now
+    set(SYRINGE_LINK_LIBS ${SANITIZER_COMMON_LINK_LIBS})
+  add_weak_symbols("sanitizer_common" WEAK_SYMBOL_LINK_FLAGS)
+  #add_weak_symbols("syringe" WEAK_SYMBOL_LINK_FLAGS)
+
+  add_compiler_rt_object_libraries(RTSyringe
+      OS ${SYRINGE_SUPPORTED_OS}
+      ARCHS ${SYRINGE_SUPPORTED_ARCH}
+      SOURCES ${SYRINGE_SOURCES}
+    ADDITIONAL_HEADERS ${SYRINGE_HEADERS}
+    CFLAGS ${SYRINGE_CFLAGS}
+    DEFS ${SYRINGE_COMMON_DEFINITIONS}
+    DEPS ${SYRINGE_DEPS})
+
+    # We only support running on osx for now.
+  add_compiler_rt_runtime(clang_rt.syringe
+    STATIC
+    OS ${SYRINGE_SUPPORTED_OS}
+    ARCHS ${SYRINGE_SUPPORTED_ARCH}
+    OBJECT_LIBS RTSyringe
+                RTSanitizerCommon
+                RTSanitizerCommonLibc
+    CFLAGS ${SYRINGE_CFLAGS}
+    DEFS ${SYRINGE_COMMON_DEFINITIONS}
+    #LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS} ${WEAK_SYMBOL_LINK_FLAGS}
+    LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS}
+    LINK_LIBS ${SYRINGE_LINK_LIBS}
+    PARENT_TARGET syringe)
+ 
 else() # not Apple
   foreach(arch ${SYRINGE_SUPPORTED_ARCH})
     if(NOT CAN_TARGET_${arch})
@@ -68,6 +95,6 @@ else() # not Apple
   endforeach()
 endif() # not Apple
 
-if(COMPILER_RT_INCLUDE_TESTS)
-  add_subdirectory(tests)
-endif()
+#if(COMPILER_RT_INCLUDE_TESTS)
+  #add_subdirectory(tests)
+#endif()
