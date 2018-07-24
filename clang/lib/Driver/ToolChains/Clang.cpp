@@ -4324,6 +4324,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_fno_inline))
     CmdArgs.push_back("-fno-inline");
 
+  if (Args.hasArg(options::OPT_fnosyringe))
+    CmdArgs.push_back("-fno-syringe");
+
+  if (Args.hasArg(options::OPT_fsyringe))
+    CmdArgs.push_back("-fsyringe");
+
   if (Arg* InlineArg = Args.getLastArg(options::OPT_finline_functions,
                                        options::OPT_finline_hint_functions,
                                        options::OPT_fno_inline_functions))
