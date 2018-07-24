@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <vector>
 
+namespace __syringe {
+
 struct InjectionData {
   void *orig_func;
   void *stub_impl;
@@ -24,11 +26,13 @@ public:
   template <typename T> bool ChangeImpl(T *orig_func, T *new_impl);
 
   template <typename T>
-  void RegisterInjection(T *orig_func, T *stub_impl, T *detour_func, T *impl_ptr);
+  void RegisterInjection(T *orig_func, T *stub_impl, T *detour_func,
+                         T *impl_ptr);
 
-  template <typename T> InjectionData *FindImplPointer(T *orig_func) ;
+  template <typename T> InjectionData *FindImplPointer(T *orig_func);
 
 private:
 };
 
+} // end namespace __syringe
 #endif /* ifndef SYRINGE_RT_H_ */
