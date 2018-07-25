@@ -51,3 +51,4 @@ autoconf/autom4te.cache
 *.o
 *.bc
 *.ll
+syringe_test_opt
