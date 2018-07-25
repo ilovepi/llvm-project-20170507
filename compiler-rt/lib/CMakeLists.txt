@@ -9,7 +9,8 @@ include(SanitizerUtils)
 #
 #TODO: Refactor sanitizer_common into smaller pieces (e.g. flag parsing, utils).
 if (COMPILER_RT_HAS_SANITIZER_COMMON AND
-    (COMPILER_RT_BUILD_SANITIZERS OR COMPILER_RT_BUILD_XRAY))
+        (COMPILER_RT_BUILD_SANITIZERS OR COMPILER_RT_BUILD_XRAY 
+        OR COMPILER_RT_BUILD_SYRINGE))
   add_subdirectory(sanitizer_common)
 endif()
 
