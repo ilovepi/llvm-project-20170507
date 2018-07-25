@@ -22,10 +22,11 @@ if (COMPILER_RT_BUILD_XRAY)
     xray/xray_log_interface.h)
 endif(COMPILER_RT_BUILD_XRAY)
 
-#if (COMPILER_RT_BUILD_SYRINGE)
+if (COMPILER_RT_BUILD_SYRINGE)
   set(SYRINGE_HEADERS
+    syringe/injection_data.h
     syringe/syringe_rt.h)
-#endif(COMPILER_RT_BUILD_SYRINGE)
+endif(COMPILER_RT_BUILD_SYRINGE)
 
 
 set(COMPILER_RT_HEADERS
@@ -62,6 +63,7 @@ install(FILES ${XRAY_HEADERS}
   COMPONENT compiler-rt-headers
   PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
   DESTINATION ${COMPILER_RT_INSTALL_PATH}/include/xray)
+# Install syringe headers.
 install(FILES ${SYRINGE_HEADERS}
   COMPONENT compiler-rt-headers
   PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ

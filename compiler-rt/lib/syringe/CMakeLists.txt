@@ -38,19 +38,24 @@ append_list_if(
 
 add_compiler_rt_component(syringe)
 
+set(SYRINGE_COMMON_RUNTIME_OBJECT_LIBS
+    RTSanitizerCommon
+    RTSanitizerCommonLibc)
+
+
 if (TARGET cxx-headers OR HAVE_LIBCXX)
     set(SYRINGE_DEPS cxx-headers)
 endif()
 
 if (APPLE)
-    set(SYRINGE_LINK_LIBS ${SANITIZER_COMMON_LINK_LIBS})
+  set(SYRINGE_LINK_LIBS ${SANITIZER_COMMON_LINK_LIBS})
   add_weak_symbols("sanitizer_common" WEAK_SYMBOL_LINK_FLAGS)
   #add_weak_symbols("syringe" WEAK_SYMBOL_LINK_FLAGS)
 
   add_compiler_rt_object_libraries(RTSyringe
-      OS ${SYRINGE_SUPPORTED_OS}
-      ARCHS ${SYRINGE_SUPPORTED_ARCH}
-      SOURCES ${SYRINGE_SOURCES}
+    OS ${SYRINGE_SUPPORTED_OS}
+    ARCHS ${SYRINGE_SUPPORTED_ARCH}
+    SOURCES ${SYRINGE_SOURCES}
     ADDITIONAL_HEADERS ${SYRINGE_HEADERS}
     CFLAGS ${SYRINGE_CFLAGS}
     DEFS ${SYRINGE_COMMON_DEFINITIONS}
@@ -90,7 +95,7 @@ else() # not Apple
      ARCHS ${arch}
      CFLAGS ${SYRINGE_CFLAGS}
      DEFS ${SYRINGE_COMMON_DEFINITIONS}
-     OBJECT_LIBS RTSyringe
+     OBJECT_LIBS ${SYRINGE_COMMON_RUNTIME_OBJECT_LIBS}  RTSyringe
      PARENT_TARGET syringe)
   endforeach()
 endif() # not Apple
