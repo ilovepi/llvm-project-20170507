@@ -454,8 +454,8 @@ bool CodeGenFunction::ShouldXRayInstrumentFunction() const {
   return CGM.getCodeGenOpts().XRayInstrumentFunctions;
 }
 
-//// ShouldSyringeInject - Return true if the current function should be
-/// instrumented with XRay nop sleds.
+//// ShouldSyringeInject - Return true if the current function should use
+/// Syringe to modify runtime behavior.
 bool CodeGenFunction::ShouldSyringeInject() const {
   return CGM.getCodeGenOpts().SyringeInjectBehaviors;
 }
