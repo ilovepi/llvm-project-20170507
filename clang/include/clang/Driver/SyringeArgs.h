@@ -1,4 +1,4 @@
-//===--- XRayArgs.h - Arguments for XRay ------------------------*- C++ -*-===//
+//===--- SyringeArgs.h - Arguments for Syringe ------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
