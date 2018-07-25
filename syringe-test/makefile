@@ -7,13 +7,21 @@ SRC=syringe.cpp
 EMIT_BC=-emit-llvm -O0 -c
 EMIT_LL=-S -emit-llvm -O0
 EMIT_ASM=-S -O0
-TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt syringe_opt.bc *.o *.ll
-FLAGS=-fsyringe $(VERBOSE)
+TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt syringe_opt.bc *.o *.ll *.a
+FLAGS=-fsyringe $(VERBOSE) -g
 #VERBOSE=-v
 
 .PHONEY: $(TARGETS) test clean opt
 
 all: syringe.ll
+
+syringe_rt.o: syringe_rt.cpp
+	$(CXX) syringe_rt.cpp -c
+
+libsyringe_rt.a: syringe_rt.o
+	ar rcs libsyringe_rt.a syringe_rt.o
+
+libs: libsyringe_rt.a
 
 injection_decl.o: injection_decl.cpp
 	$(CXX) -c injection_decl.cpp $(FLAGS)
@@ -39,8 +47,12 @@ syringe_opt.bc: syringe.bc
 syringe_opt.ll: syringe_opt.bc
 	$(DIS) syringe_opt.bc
 
+#syringe_test_opt: main.o syringe_opt.o injection_decl.o libs
+#$(CXX) main.o syringe_opt.o injection_decl.o -L . -lsyringe_rt -o syringe_test_opt $(FLAGS)
+
 syringe_test_opt: main.o syringe_opt.o injection_decl.o
-	$(CXX) main.o syringe_opt.o injection_decl.o -o syringe_test_opt $(FLAGS)
+	$(CXX) main.o syringe_opt.o injection_decl.o  -o syringe_test_opt $(FLAGS)
+
 
 syringe_opt.o: syringe_opt.bc
 	$(CXX) syringe_opt.bc -c $(FLAGS)
