@@ -1097,7 +1097,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   }
 
   if (getSyringeArgs().needsSyringeRt()) {
-    AddSyringeRTLibArgs(Args, CmdArgs);
+    AddSyringeRTLibArgs(Args, CmdArgs, false);
   }
 
   const SanitizerArgs &Sanitize = getSanitizerArgs();
