@@ -20,6 +20,7 @@
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
@@ -68,7 +69,15 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       auto mangledFuncName = F.getName();
       errs() << "Mangled Name: " << mangledFuncName << "\n";
 
-      //cloneDecl->setName(F.getName() + "_syringe_impl");
+      auto *aliasDecl = orc::cloneFunctionDecl(M, F, &VMap);
+      aliasDecl->setName("_Z18hello_detour_implv");
+      aliasDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
+      aliasDecl->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+
+
+//$_ZN9__syringe17RegisterInjectionIPFvvEPS2_EEvT_S4_S4_T0_ = comdat any
+
+      // cloneDecl->setName(F.getName() + "_syringe_impl");
       cloneDecl->setName("_Z18hello_syringe_implv");
       orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
       cloneDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
@@ -77,16 +86,16 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // cloneFunc->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
       // cloneFunc->setName(F.getName() + "_syringe_impl");
 
-       //auto injected = M.getFunction("_Z8injectedv");
-       //if (!injected)
-       //errs() << "Injected function didn't exist!\n";
+      // auto injected = M.getFunction("_Z8injectedv");
+      // if (!injected)
+      // errs() << "Injected function didn't exist!\n";
 
       // create impl pointer
       // orc::moveFunctionBody(F, cloneDecl, );
       auto SyringePtr = orc::createImplPointer(
           //*F.getType(), M, "_ZL17hello_syringe_ptr", cloneDecl);
           *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
-          //*F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
+      //*F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
 
       // create stub body for original call
@@ -95,6 +104,8 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // replace original body w/ indirect call
     } else if (F.hasFnAttribute(Attribute::SyringePayload)) {
       errs() << "Found Syringe Payload\n";
+      // create alias
+
       continue;
     }
   }
