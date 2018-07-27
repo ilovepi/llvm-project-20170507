@@ -20,22 +20,23 @@
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Module.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 
 using namespace llvm;
 
-/// initializeSyringe - Initialize all passes in the Syringe
-/// library.
+/// initializeSyringe - Initialize all passes in the Syringe library.
 void initializeSyringe(PassRegistry &Registry) {
   initializeSyringePass(Registry);
 }
 
-/// LLVMInitializeSyringe - C binding for
-/// initializeSyringe.
+/// LLVMInitializeSyringe - C binding for initializeSyringe.
 void LLVMInitializeSyringe(LLVMPassRegistryRef R) {
   initializeSyringePass(*unwrap(R));
 }
@@ -58,24 +59,36 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
   errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
   for (Function &F : M) {
+    ret = true;
+    if (F.hasFnAttribute(Attribute::SyringePayload)) {
+      errs() << "Found Syringe Payload\n";
+      // create alias
+      auto alias = GlobalAlias::create("_Z18hello_detour_implv", &F);
+      alias->setVisibility(GlobalValue::VisibilityTypes::DefaultVisibility);
+    }
+  }
+
+  for (Function &F : M) {
     if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
       errs() << "Found Syringe Injection Site\n";
       ret = true;
       ValueToValueMapTy VMap;
 
       // clone function
-      // TODO: Decide if this nullptr should be a VMap
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
       auto mangledFuncName = F.getName();
       errs() << "Mangled Name: " << mangledFuncName << "\n";
 
-      auto *aliasDecl = orc::cloneFunctionDecl(M, F, &VMap);
-      aliasDecl->setName("_Z18hello_detour_implv");
-      aliasDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
-      aliasDecl->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+      auto *internalAlias = M.getNamedAlias("_Z18hello_detour_implv");
 
+      if (internalAlias == nullptr) {
+        auto aliasDecl = orc::cloneFunctionDecl(M, F, nullptr);
+        aliasDecl->setName("_Z18hello_detour_implv");
+        aliasDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
+        aliasDecl->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+      }
 
-//$_ZN9__syringe17RegisterInjectionIPFvvEPS2_EEvT_S4_S4_T0_ = comdat any
+      //$_ZN9__syringe17RegisterInjectionIPFvvEPS2_EEvT_S4_S4_T0_ = comdat any
 
       // cloneDecl->setName(F.getName() + "_syringe_impl");
       cloneDecl->setName("_Z18hello_syringe_implv");
@@ -100,14 +113,21 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
 
       // create stub body for original call
       orc::makeStub(F, *SyringePtr);
-
-      // replace original body w/ indirect call
-    } else if (F.hasFnAttribute(Attribute::SyringePayload)) {
-      errs() << "Found Syringe Payload\n";
-      // create alias
-
-      continue;
     }
+  }
+
+  // if we've made a modification, add a global ctor entry for the function
+  if (ret) {
+      auto regFuncName = "__syringe_register";
+      auto VoidPtrTy = Type::getInt8PtrTy(M.getContext());
+    Type *ParamTypes[] = {VoidPtrTy, VoidPtrTy, VoidPtrTy, VoidPtrTy};
+    auto retTy = Type::getVoidTy(M.getContext());
+    auto fTy = FunctionType::get(retTy, makeArrayRef(ParamTypes,4), false);
+    auto constF = M.getOrInsertFunction(regFuncName, fTy);
+    auto regFunc = M.getFunction(regFuncName);
+    regFunc->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+
+    //appendToGlobalCtors(M, regFunc, 1);
   }
 
   return ret;
