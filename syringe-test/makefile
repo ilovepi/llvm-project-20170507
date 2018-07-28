@@ -4,25 +4,18 @@ CXX=$(PREFIX)/clang++
 OPT=$(PREFIX)/opt
 DIS=$(PREFIX)/llvm-dis
 SRC=syringe.cpp
-EMIT_BC=-emit-llvm -O0 -c
-EMIT_LL=-S -emit-llvm -O1
-EMIT_ASM=-S -O0
+EMIT_BC=-emit-llvm $(OPTIMIZE) -c
+EMIT_LL=-S -emit-llvm $(OPTIMIZE)
+EMIT_ASM=-S $(OPTIMIZE)
 TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt syringe_opt.bc *.o *.ll *.a
-FLAGS=-fsyringe $(VERBOSE) $(DEBUG)
+FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE)
+OPTIMIZE=-O0
 #VERBOSE=-v
-#DEBUG=-g
+DEBUG=-g
 
 .PHONEY: $(TARGETS) test clean opt
 
 all: syringe.ll
-
-syringe_rt.o: syringe_rt.cpp
-	$(CXX) syringe_rt.cpp -c
-
-libsyringe_rt.a: syringe_rt.o
-	ar rcs libsyringe_rt.a syringe_rt.o
-
-libs: libsyringe_rt.a
 
 injection_decl.o: injection_decl.cpp
 	$(CXX) -c injection_decl.cpp $(FLAGS)
