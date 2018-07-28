@@ -52,10 +52,10 @@ template <typename T> bool ChangeImpl(T orig_func, T new_impl) {
 
 } // end namespace __syringe
 
-//extern "C" {
+extern "C" {
 
-//void __syringe_register(void *orig_func, void *stub_impl, void *detour_func,
-                        //void **impl_ptr);
-//}
+void __syringe_register(void *orig_func, void *stub_impl, void *detour_func,
+                        void **impl_ptr);
+}
 
 #endif /* ifndef SYRINGE_RT_H_ */

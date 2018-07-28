@@ -21,6 +21,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Module.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -29,7 +30,11 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
+
 using namespace llvm;
+static const char *const kSyringeModuleCtorName = "syringe.module_ctor";
+static const char *const kSyringeInitName = "__syringe_init";
+
 
 /// initializeSyringe - Initialize all passes in the Syringe library.
 void initializeSyringe(PassRegistry &Registry) {
@@ -58,6 +63,12 @@ bool Syringe::runOnModule(Module &M) {
 bool Syringe::doBehaviorInjectionForModule(Module &M) {
   errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
+
+    Function *target;
+    Function* stub;
+    GlobalValue *ptr_syringe;
+    Function *detour;
+
   for (Function &F : M) {
     ret = true;
     if (F.hasFnAttribute(Attribute::SyringePayload)) {
@@ -65,6 +76,7 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // create alias
       auto alias = GlobalAlias::create("_Z18hello_detour_implv", &F);
       alias->setVisibility(GlobalValue::VisibilityTypes::DefaultVisibility);
+      detour = &F;
     }
   }
 
@@ -94,6 +106,7 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       cloneDecl->setName("_Z18hello_syringe_implv");
       orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
       cloneDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
+      stub = cloneDecl;
 
       // auto *cloneFunc = CloneFunction(&F, VMap);
       // cloneFunc->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
@@ -110,6 +123,8 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
           *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
       //*F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
+      target = &F;
+      ptr_syringe  = SyringePtr;
 
       // create stub body for original call
       orc::makeStub(F, *SyringePtr);
@@ -117,17 +132,45 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
   }
 
   // if we've made a modification, add a global ctor entry for the function
-  if (ret) {
+  if (ret && target && ptr_syringe) {
       auto regFuncName = "__syringe_register";
-      auto VoidPtrTy = Type::getInt8PtrTy(M.getContext());
-    Type *ParamTypes[] = {VoidPtrTy, VoidPtrTy, VoidPtrTy, VoidPtrTy};
+      auto funcTy = target->getType();
+    Type *ParamTypes[] = {funcTy, funcTy, funcTy, ptr_syringe->getType() };
+    auto ParamTypesRef = makeArrayRef(ParamTypes,4);
     auto retTy = Type::getVoidTy(M.getContext());
-    auto fTy = FunctionType::get(retTy, makeArrayRef(ParamTypes,4), false);
+    auto fTy = FunctionType::get(retTy, ParamTypesRef , false);
     auto constF = M.getOrInsertFunction(regFuncName, fTy);
     auto regFunc = M.getFunction(regFuncName);
     regFunc->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
 
-    //appendToGlobalCtors(M, regFunc, 1);
+    Value* ParamArgs[] = {target, stub, detour, ptr_syringe};
+    auto ParamArgsRef = makeArrayRef(ParamArgs,4);
+
+    //errs() << "Param Args\n";
+    //for(auto a: ParamArgsRef)
+    //{
+        //errs() << "Item: " << *a << ", ";
+    //}
+    //errs() << "\n";
+
+    errs() << "Param Types\n";
+for(auto a: ParamTypesRef)
+    {
+        errs()<<  "Item: " << *a << ", ";
+    }
+    errs() << "\n";
+
+
+    Function *Ctor = Function::Create(
+      fTy,
+      GlobalValue::InternalLinkage,kSyringeModuleCtorName , &M);
+  BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
+  IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
+  IRB.CreateCall(constF, ParamArgsRef);
+
+  Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+
+    //appendToGlobalCtors(M, Ctor, 1, Ctor);
   }
 
   return ret;
