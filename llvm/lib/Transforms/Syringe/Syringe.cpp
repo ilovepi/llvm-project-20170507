@@ -123,44 +123,59 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
 
   // if we've made a modification, add a global ctor entry for the function
   if (ret && target && ptr_syringe) {
-      auto regFuncName = "__syringe_register";
-      auto funcTy = target->getType();
-    Type *ParamTypes[] = {funcTy, funcTy, funcTy, ptr_syringe->getType() };
-    auto ParamTypesRef = makeArrayRef(ParamTypes,4);
+
+    // target function types
+    auto funcTy = target->getType();
+
+    // the parameter types of the registration function
+    Type *ParamTypes[] = {funcTy, funcTy, funcTy, ptr_syringe->getType()};
+    auto ParamTypesRef = makeArrayRef(ParamTypes, 4);
+
+    // actual parameters
+    Value *ParamArgs[] = {target, stub, detour, ptr_syringe};
+    auto ParamArgsRef = makeArrayRef(ParamArgs, 4);
+
+    // void return type
     auto retTy = Type::getVoidTy(M.getContext());
-    auto fTy = FunctionType::get(retTy, ParamTypesRef , false);
-    auto constF = M.getOrInsertFunction(regFuncName, fTy);
-    auto regFunc = M.getFunction(regFuncName);
+
+    // the type of the registration function
+    auto fTy = FunctionType::get(retTy, ParamTypesRef, false);
+
+    // create or find the registration function
+    auto constF = M.getOrInsertFunction(kSyringeInitName, fTy);
+    auto regFunc = M.getFunction(kSyringeInitName);
+
+    // set its linkage
     regFunc->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
 
-    Value* ParamArgs[] = {target, stub, detour, ptr_syringe};
-    auto ParamArgsRef = makeArrayRef(ParamArgs,4);
-
-    //errs() << "Param Args\n";
-    //for(auto a: ParamArgsRef)
+    // errs() << "Param Args\n";
+    // for(auto a: ParamArgsRef)
     //{
-        //errs() << "Item: " << *a << ", ";
+    // errs() << "Item: " << *a << ", ";
     //}
-    //errs() << "\n";
+    // errs() << "\n";
 
-    errs() << "Param Types\n";
-for(auto a: ParamTypesRef)
-    {
-        errs()<<  "Item: " << *a << ", ";
-    }
-    errs() << "\n";
+    // errs() << "Param Types\n";
+    // for (auto a : ParamTypesRef) {
+    // errs() << "Item: " << *a << ", ";
+    //}
+    // errs() << "\n";
 
-
+    // create a ctor
     Function *Ctor = Function::Create(
-      fTy,
-      GlobalValue::InternalLinkage,kSyringeModuleCtorName , &M);
-  BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
-  IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
-  IRB.CreateCall(constF, ParamArgsRef);
+        FunctionType::get(Type::getVoidTy(M.getContext()), false),
+        GlobalValue::InternalLinkage, kSyringeModuleCtorName, &M);
+    // give it a body and have it call the registration function w/ our target
+    // arguments
+    BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
+    IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
+    IRB.CreateCall(constF, ParamArgsRef);
 
-  Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+    // Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
 
-    //appendToGlobalCtors(M, Ctor, 1, Ctor);
+    // Ctor->setComdat(M.getOrInsertComdat(kSyringeModuleCtorName));
+    appendToGlobalCtors(M, Ctor, 65535);
+    // errs() << M;
   }
 
   return ret;
