@@ -17,24 +17,22 @@
 #include "llvm/InitializePasses.h"
 #include "llvm/PassRegistry.h"
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
-
 using namespace llvm;
 static const char *const kSyringeModuleCtorName = "syringe.module_ctor";
-static const char *const kSyringeInitName = "__syringe_init";
-
+static const char *const kSyringeInitName = "__syringe_register";
 
 /// initializeSyringe - Initialize all passes in the Syringe library.
 void initializeSyringe(PassRegistry &Registry) {
