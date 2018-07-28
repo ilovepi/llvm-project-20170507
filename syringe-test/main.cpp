@@ -2,13 +2,13 @@
 #include "util.hpp"
 
 #include <syringe/syringe_rt.h>
-//#include "syringe_rt.h"
 
 using namespace __syringe;
 
 int main()
 {
-    RegisterInjection(hello, hello_syringe_impl, injected, &_Z17hello_syringe_ptr);
+    //RegisterInjection(hello, hello_syringe_impl, injected, &_Z17hello_syringe_ptr);
+    __syringe_register(hello, hello_syringe_impl, injected, &_Z17hello_syringe_ptr);
     init(false);
     hello();
     goodbye();
