@@ -62,10 +62,10 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
   errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
 
-    Function *target;
-    Function* stub;
-    GlobalValue *ptr_syringe;
-    Function *detour;
+  Function *target;
+  Function *stub;
+  GlobalValue *ptr_syringe;
+  Function *detour;
 
   for (Function &F : M) {
     ret = true;
