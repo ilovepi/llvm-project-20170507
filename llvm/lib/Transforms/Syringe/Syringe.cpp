@@ -86,8 +86,8 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
 
       // clone function
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
-      auto mangledFuncName = F.getName();
-      errs() << "Mangled Name: " << mangledFuncName << "\n";
+      //auto mangledFuncName = F.getName();
+      //errs() << "Mangled Name: " << mangledFuncName << "\n";
 
       auto *internalAlias = M.getNamedAlias("_Z18hello_detour_implv");
 
@@ -97,8 +97,6 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
         aliasDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
         aliasDecl->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
       }
-
-      //$_ZN9__syringe17RegisterInjectionIPFvvEPS2_EEvT_S4_S4_T0_ = comdat any
 
       // cloneDecl->setName(F.getName() + "_syringe_impl");
       cloneDecl->setName("_Z18hello_syringe_implv");
@@ -110,19 +108,13 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
       // cloneFunc->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
       // cloneFunc->setName(F.getName() + "_syringe_impl");
 
-      // auto injected = M.getFunction("_Z8injectedv");
-      // if (!injected)
-      // errs() << "Injected function didn't exist!\n";
-
       // create impl pointer
-      // orc::moveFunctionBody(F, cloneDecl, );
       auto SyringePtr = orc::createImplPointer(
-          //*F.getType(), M, "_ZL17hello_syringe_ptr", cloneDecl);
           *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
       //*F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
       target = &F;
-      ptr_syringe  = SyringePtr;
+      ptr_syringe = SyringePtr;
 
       // create stub body for original call
       orc::makeStub(F, *SyringePtr);
