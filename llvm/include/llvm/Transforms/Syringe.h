@@ -1,22 +1,31 @@
-#ifndef LLVM_TRANSFORMS_IPO_H
-#define LLVM_TRANSFORMS_IPO_H
+#ifndef LLVM_TRANSFORMS_SYRINGE_H
+#define LLVM_TRANSFORMS_SYRINGE_H
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 
 namespace llvm {
 class ModulePass;
 
-void initializeSyringe(PassRegistry &Registry);
+/// Pass to insert Syringe Injection sites.
+class SyringePass : public PassInfoMixin<SyringePass> {
+public:
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+};
 
-class SyringePass : public ModulePass {
+ModulePass *createSyringe();
+
+void initializeSyringeLegacyPass(PassRegistry &Registry);
+
+class SyringeLegacyPass : public ModulePass {
 public:
   /// pass identification
   static char ID;
 
-  SyringePass();
-  virtual ~SyringePass() = default;
+  SyringeLegacyPass();
+  virtual ~SyringeLegacyPass() = default;
 
   /// Specify pass name for debug output
   StringRef getPassName() const override;

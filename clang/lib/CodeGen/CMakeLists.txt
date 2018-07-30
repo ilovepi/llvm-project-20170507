@@ -18,6 +18,7 @@ set(LLVM_LINK_COMPONENTS
   Passes
   ProfileData
   ScalarOpts
+  Syringe
   Support
   Target
   TransformUtils

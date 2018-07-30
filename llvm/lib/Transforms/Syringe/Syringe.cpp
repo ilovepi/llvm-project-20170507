@@ -34,23 +34,42 @@ using namespace llvm;
 static const char *const kSyringeModuleCtorName = "syringe.module_ctor";
 static const char *const kSyringeInitName = "__syringe_register";
 
+static bool doInjectionForModule(Module& M){
+  for (Function &F : M) {
+    if (F.hasFnAttribute(Attribute::SyringePayload) || F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
+      return true;
+    }
+  }
+    return false;
+}
+
+
+PreservedAnalyses SyringePass::run(Module &M,
+                                          ModuleAnalysisManager &AM) {
+  if (!doInjectionForModule(M))
+    return PreservedAnalyses::all();
+
+  return PreservedAnalyses::none();
+}
+
+
 /// initializeSyringe - Initialize all passes in the Syringe library.
-void initializeSyringePass(PassRegistry &Registry) {
-  initializeSyringePassPass(Registry);
+void initializeSyringeLegacyPass(PassRegistry &Registry) {
+  initializeSyringeLegacyPassPass(Registry);
 }
 
 /// LLVMInitializeSyringe - C binding for initializeSyringe.
 void LLVMInitializeSyringe(LLVMPassRegistryRef R) {
-  initializeSyringePassPass(*unwrap(R));
+  initializeSyringeLegacyPassPass(*unwrap(R));
 }
 
-SyringePass::SyringePass() : ModulePass(ID) {}
+SyringeLegacyPass::SyringeLegacyPass() : ModulePass(ID) {}
 
 /// Specify pass name for debug output
-StringRef SyringePass::getPassName() const { return "Syringe Instrumentation"; }
+StringRef SyringeLegacyPass::getPassName() const { return "Syringe Instrumentation"; }
 
 /// run module pass
-bool SyringePass::runOnModule(Module &M) {
+bool SyringeLegacyPass::runOnModule(Module &M) {
   if (skipModule(M)) {
     return false;
   }
@@ -58,14 +77,14 @@ bool SyringePass::runOnModule(Module &M) {
 }
 
 /// create funciton stub for behavior injection
-bool SyringePass::doBehaviorInjectionForModule(Module &M) {
+bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
   errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
 
-  Function *target;
-  Function *stub;
-  GlobalValue *ptr_syringe;
-  Function *detour;
+  Function *target = nullptr;
+  Function *stub = nullptr;
+  GlobalValue *ptr_syringe = nullptr;
+  Function *detour = nullptr;
 
   for (Function &F : M) {
     ret = true;
@@ -86,8 +105,6 @@ bool SyringePass::doBehaviorInjectionForModule(Module &M) {
 
       // clone function
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
-      //auto mangledFuncName = F.getName();
-      //errs() << "Mangled Name: " << mangledFuncName << "\n";
 
       auto *internalAlias = M.getNamedAlias("_Z18hello_detour_implv");
 
@@ -104,14 +121,9 @@ bool SyringePass::doBehaviorInjectionForModule(Module &M) {
       cloneDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
       stub = cloneDecl;
 
-      // auto *cloneFunc = CloneFunction(&F, VMap);
-      // cloneFunc->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
-      // cloneFunc->setName(F.getName() + "_syringe_impl");
-
       // create impl pointer
       auto SyringePtr = orc::createImplPointer(
           *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
-      //*F.getType(), M, F.getName() + "$stub_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
       target = &F;
       ptr_syringe = SyringePtr;
@@ -148,23 +160,11 @@ bool SyringePass::doBehaviorInjectionForModule(Module &M) {
     // set its linkage
     regFunc->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
 
-    // errs() << "Param Args\n";
-    // for(auto a: ParamArgsRef)
-    //{
-    // errs() << "Item: " << *a << ", ";
-    //}
-    // errs() << "\n";
-
-    // errs() << "Param Types\n";
-    // for (auto a : ParamTypesRef) {
-    // errs() << "Item: " << *a << ", ";
-    //}
-    // errs() << "\n";
-
     // create a ctor
     Function *Ctor = Function::Create(
         FunctionType::get(Type::getVoidTy(M.getContext()), false),
         GlobalValue::InternalLinkage, kSyringeModuleCtorName, &M);
+
     // give it a body and have it call the registration function w/ our target
     // arguments
     BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
@@ -172,7 +172,6 @@ bool SyringePass::doBehaviorInjectionForModule(Module &M) {
     IRB.CreateCall(constF, ParamArgsRef);
 
     // Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-
     // Ctor->setComdat(M.getOrInsertComdat(kSyringeModuleCtorName));
     appendToGlobalCtors(M, Ctor, 65535);
     // errs() << M;
@@ -181,8 +180,8 @@ bool SyringePass::doBehaviorInjectionForModule(Module &M) {
   return ret;
 }
 
-ModulePass *createSyringe() { return new SyringePass(); }
-char SyringePass::ID;
+ModulePass *llvm::createSyringe() { return new SyringeLegacyPass(); }
+char SyringeLegacyPass::ID;
 
-INITIALIZE_PASS(SyringePass, "syringe", "Syringe: dynamic behavior injection.",
+INITIALIZE_PASS(SyringeLegacyPass, "syringe", "Syringe: dynamic behavior injection.",
                 false, false)
