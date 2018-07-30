@@ -41,12 +41,8 @@ syringe_opt.bc: syringe.bc
 syringe_opt.ll: syringe_opt.bc
 	$(DIS) syringe_opt.bc
 
-#syringe_test_opt: main.o syringe_opt.o injection_decl.o libs
-#$(CXX) main.o syringe_opt.o injection_decl.o -L . -lsyringe_rt -o syringe_test_opt $(FLAGS)
-
 syringe_test_opt: main.o syringe_opt.o injection_decl.o
 	$(CXX) main.o syringe_opt.o injection_decl.o  -o syringe_test_opt $(FLAGS)
-
 
 syringe_opt.o: syringe_opt.bc
 	$(CXX) syringe_opt.bc -c $(FLAGS)

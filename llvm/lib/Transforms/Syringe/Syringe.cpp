@@ -35,22 +35,22 @@ static const char *const kSyringeModuleCtorName = "syringe.module_ctor";
 static const char *const kSyringeInitName = "__syringe_register";
 
 /// initializeSyringe - Initialize all passes in the Syringe library.
-void initializeSyringe(PassRegistry &Registry) {
-  initializeSyringePass(Registry);
+void initializeSyringePass(PassRegistry &Registry) {
+  initializeSyringePassPass(Registry);
 }
 
 /// LLVMInitializeSyringe - C binding for initializeSyringe.
 void LLVMInitializeSyringe(LLVMPassRegistryRef R) {
-  initializeSyringePass(*unwrap(R));
+  initializeSyringePassPass(*unwrap(R));
 }
 
-Syringe::Syringe() : ModulePass(ID) {}
+SyringePass::SyringePass() : ModulePass(ID) {}
 
 /// Specify pass name for debug output
-StringRef Syringe::getPassName() const { return "Syringe Instrumentation"; }
+StringRef SyringePass::getPassName() const { return "Syringe Instrumentation"; }
 
 /// run module pass
-bool Syringe::runOnModule(Module &M) {
+bool SyringePass::runOnModule(Module &M) {
   if (skipModule(M)) {
     return false;
   }
@@ -58,7 +58,7 @@ bool Syringe::runOnModule(Module &M) {
 }
 
 /// create funciton stub for behavior injection
-bool Syringe::doBehaviorInjectionForModule(Module &M) {
+bool SyringePass::doBehaviorInjectionForModule(Module &M) {
   errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
 
@@ -181,8 +181,8 @@ bool Syringe::doBehaviorInjectionForModule(Module &M) {
   return ret;
 }
 
-ModulePass *createSyringe() { return new Syringe(); }
-char Syringe::ID;
+ModulePass *createSyringe() { return new SyringePass(); }
+char SyringePass::ID;
 
-INITIALIZE_PASS(Syringe, "syringe", "Syringe: dynamic behavior injection.",
+INITIALIZE_PASS(SyringePass, "syringe", "Syringe: dynamic behavior injection.",
                 false, false)
