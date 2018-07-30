@@ -8,12 +8,12 @@ EMIT_BC=-emit-llvm $(OPTIMIZE) -c
 EMIT_LL=-S -emit-llvm $(OPTIMIZE)
 EMIT_ASM=-S $(OPTIMIZE)
 TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt syringe_opt.bc *.o *.ll *.a
-FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE) $(LIBS)
+FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE)
 #OPTIMIZE=-O0
 #VERBOSE=-v
 DEBUG=-g
-LIBS=-stdlib=libc++ -lc++abi -I~/clang-dev/include/c++/v1  -L~/clang-dev/lib 
-export LD_LIBRARY_PATH=/usr/local/google/home/paulkirth/clang-dev/lib
+LIBS=-stdlib=libc++ -lc++abi -I $(HOME)/clang-dev/include/c++/v1  -L $(HOME)/clang-dev/lib
+export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
 
 .PHONEY: $(TARGETS) test clean opt
 
@@ -44,7 +44,7 @@ syringe_opt.ll: syringe_opt.bc
 	$(DIS) syringe_opt.bc
 
 syringe_test_opt: main.o syringe_opt.o injection_decl.o
-	$(CXX) main.o syringe_opt.o injection_decl.o  -o syringe_test_opt $(FLAGS)
+	$(CXX) main.o syringe_opt.o injection_decl.o  -o syringe_test_opt $(FLAGS) $(LIBS)
 
 syringe_opt.o: syringe_opt.bc
 	$(CXX) syringe_opt.bc -c $(FLAGS)
