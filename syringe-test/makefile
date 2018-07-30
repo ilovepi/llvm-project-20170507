@@ -23,6 +23,9 @@ all: syringe.ll
 injection_decl.o: injection_decl.cpp
 	$(CXX) -c injection_decl.cpp $(FLAGS) $(STD)
 
+%.o: %.cpp
+	$(CXX) $< -c $(FLAGS) $(STD)
+
 %.ll: %.cpp
 	$(CXX) $< $(EMIT_LL) $(FLAGS) $(STD)
 
@@ -38,17 +41,8 @@ test: syringe_test
 opt-test: syringe_test_opt
 	./syringe_test_opt
 
-syringe_opt.bc: syringe.bc
-	$(OPT) syringe.bc -syringe -o syringe_opt.bc
-
-syringe_opt.ll: syringe_opt.bc
-	$(DIS) syringe_opt.bc
-
-syringe_test_opt: main.o syringe_opt.o injection_decl.o
-	$(CXX) main.o syringe_opt.o injection_decl.o  -o syringe_test_opt $(FLAGS) $(LIBS) $(STD)
-
-syringe_opt.o: syringe_opt.bc
-	$(CXX) syringe_opt.bc -c $(FLAGS)
+syringe_test_opt: main.o syringe.o injection_decl.o
+	$(CXX) main.o syringe.o injection_decl.o  -o syringe_test_opt $(FLAGS) $(LIBS) $(STD)
 
 main.o: main.cpp
 	$(CXX) main.cpp -c $(FLAGS) $(STD)
