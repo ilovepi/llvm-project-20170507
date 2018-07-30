@@ -1062,7 +1062,7 @@ static void handleConsumableAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
         << AL.getName() << AANT_ArgumentIdentifier;
     return;
   }
-  
+
   D->addAttr(::new (S.Context)
              ConsumableAttr(AL.getRange(), S.Context, DefaultState,
                             AL.getAttributeSpellingListIndex()));
@@ -1072,30 +1072,30 @@ static bool checkForConsumableClass(Sema &S, const CXXMethodDecl *MD,
                                     const ParsedAttr &AL) {
   ASTContext &CurrContext = S.getASTContext();
   QualType ThisType = MD->getThisType(CurrContext)->getPointeeType();
-  
+
   if (const CXXRecordDecl *RD = ThisType->getAsCXXRecordDecl()) {
     if (!RD->hasAttr<ConsumableAttr>()) {
       S.Diag(AL.getLoc(), diag::warn_attr_on_unconsumable_class) <<
         RD->getNameAsString();
-      
+
       return false;
     }
   }
-  
+
   return true;
 }
 
 static void handleCallableWhenAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   if (!checkAttributeAtLeastNumArgs(S, AL, 1))
     return;
-  
+
   if (!checkForConsumableClass(S, cast<CXXMethodDecl>(D), AL))
     return;
-  
+
   SmallVector<CallableWhenAttr::ConsumedState, 3> States;
   for (unsigned ArgIndex = 0; ArgIndex < AL.getNumArgs(); ++ArgIndex) {
     CallableWhenAttr::ConsumedState CallableState;
-    
+
     StringRef StateString;
     SourceLocation Loc;
     if (AL.isArgIdent(ArgIndex)) {
@@ -1113,10 +1113,10 @@ static void handleCallableWhenAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
         << AL.getName() << StateString;
       return;
     }
-      
+
     States.push_back(CallableState);
   }
-  
+
   D->addAttr(::new (S.Context)
              CallableWhenAttr(AL.getRange(), S.Context, States.data(),
                States.size(), AL.getAttributeSpellingListIndex()));
@@ -1124,7 +1124,7 @@ static void handleCallableWhenAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 
 static void handleParamTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   ParamTypestateAttr::ConsumedState ParamState;
-  
+
   if (AL.isArgIdent(0)) {
     IdentifierLoc *Ident = AL.getArgAsIdent(0);
     StringRef StateString = Ident->Ident->getName();
@@ -1140,7 +1140,7 @@ static void handleParamTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       AL.getName() << AANT_ArgumentIdentifier;
     return;
   }
-  
+
   // FIXME: This check is currently being done in the analysis.  It can be
   //        enabled here only after the parser propagates attributes at
   //        template specialization definition, not declaration.
@@ -1152,7 +1152,7 @@ static void handleParamTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   //      ReturnType.getAsString();
   //    return;
   //}
-  
+
   D->addAttr(::new (S.Context)
              ParamTypestateAttr(AL.getRange(), S.Context, ParamState,
                                 AL.getAttributeSpellingListIndex()));
@@ -1160,7 +1160,7 @@ static void handleParamTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 
 static void handleReturnTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   ReturnTypestateAttr::ConsumedState ReturnState;
-  
+
   if (AL.isArgIdent(0)) {
     IdentifierLoc *IL = AL.getArgAsIdent(0);
     if (!ReturnTypestateAttr::ConvertStrToConsumedState(IL->Ident->getName(),
@@ -1174,7 +1174,7 @@ static void handleReturnTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       AL.getName() << AANT_ArgumentIdentifier;
     return;
   }
-  
+
   // FIXME: This check is currently being done in the analysis.  It can be
   //        enabled here only after the parser propagates attributes at
   //        template specialization definition, not declaration.
@@ -1186,9 +1186,9 @@ static void handleReturnTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   //} else if (const CXXConstructorDecl *Constructor =
   //             dyn_cast<CXXConstructorDecl>(D)) {
   //  ReturnType = Constructor->getThisType(S.getASTContext())->getPointeeType();
-  //  
+  //
   //} else {
-  //  
+  //
   //  ReturnType = cast<FunctionDecl>(D)->getCallResultType();
   //}
   //
@@ -1208,7 +1208,7 @@ static void handleReturnTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 static void handleSetTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   if (!checkForConsumableClass(S, cast<CXXMethodDecl>(D), AL))
     return;
-  
+
   SetTypestateAttr::ConsumedState NewState;
   if (AL.isArgIdent(0)) {
     IdentifierLoc *Ident = AL.getArgAsIdent(0);
@@ -1223,7 +1223,7 @@ static void handleSetTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       AL.getName() << AANT_ArgumentIdentifier;
     return;
   }
-  
+
   D->addAttr(::new (S.Context)
              SetTypestateAttr(AL.getRange(), S.Context, NewState,
                               AL.getAttributeSpellingListIndex()));
@@ -1232,8 +1232,8 @@ static void handleSetTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 static void handleTestTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   if (!checkForConsumableClass(S, cast<CXXMethodDecl>(D), AL))
     return;
-  
-  TestTypestateAttr::ConsumedState TestState;  
+
+  TestTypestateAttr::ConsumedState TestState;
   if (AL.isArgIdent(0)) {
     IdentifierLoc *Ident = AL.getArgAsIdent(0);
     StringRef Param = Ident->Ident->getName();
@@ -1247,7 +1247,7 @@ static void handleTestTypestateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       AL.getName() << AANT_ArgumentIdentifier;
     return;
   }
-  
+
   D->addAttr(::new (S.Context)
              TestTypestateAttr(AL.getRange(), S.Context, TestState,
                                 AL.getAttributeSpellingListIndex()));
@@ -1991,7 +1991,7 @@ static void handleAnalyzerNoReturnAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       return;
     }
   }
-  
+
   D->addAttr(::new (S.Context)
              AnalyzerNoReturnAttr(AL.getRange(), S.Context,
                                   AL.getAttributeSpellingListIndex()));
@@ -2354,7 +2354,7 @@ static void handleAvailabilityAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     return;
   IdentifierLoc *Platform = AL.getArgAsIdent(0);
   unsigned Index = AL.getAttributeSpellingListIndex();
-  
+
   IdentifierInfo *II = Platform->Ident;
   if (AvailabilityAttr::getPrettyPlatformName(II->getName()).empty())
     S.Diag(Platform->Loc, diag::warn_availability_unknown_platform)
@@ -2544,7 +2544,7 @@ static void handleVisibilityAttr(Sema &S, Decl *D, const ParsedAttr &AL,
       << AL.getName() << TypeStr;
     return;
   }
-  
+
   // Complain about attempts to use protected visibility on targets
   // (like Darwin) that don't support it.
   if (type == VisibilityAttr::Protected &&
@@ -2615,7 +2615,7 @@ static void handleObjCNSObject(Sema &S, Decl *D, const ParsedAttr &AL) {
     //  @property (retain, nonatomic) struct Bork *Q __attribute__((NSObject));
     //
     // In this case it follows tradition and suppresses an error in the above
-    // case.    
+    // case.
     S.Diag(D->getLocation(), diag::warn_nsobject_attribute);
   }
   D->addAttr(::new (S.Context)
@@ -2763,14 +2763,14 @@ static void handleWarnUnusedResult(Sema &S, Decl *D, const ParsedAttr &AL) {
       << AL.getName() << 1;
       return;
     }
-  
+
   // If this is spelled as the standard C++17 attribute, but not in C++17, warn
   // about using it as an extension.
   if (!S.getLangOpts().CPlusPlus17 && AL.isCXX11Attribute() &&
       !AL.getScopeName())
     S.Diag(AL.getLoc(), diag::ext_cxx17_attr) << AL.getName();
 
-  D->addAttr(::new (S.Context) 
+  D->addAttr(::new (S.Context)
              WarnUnusedResultAttr(AL.getRange(), S.Context,
                                   AL.getAttributeSpellingListIndex()));
 }
@@ -2903,7 +2903,7 @@ bool Sema::checkSectionName(SourceLocation LiteralLoc, StringRef SecName) {
   std::string Error = Context.getTargetInfo().isValidSectionSpecifier(SecName);
   if (!Error.empty()) {
     Diag(LiteralLoc, diag::err_attribute_section_invalid_for_target) << Error
-         << 1 /*'section'*/;	  
+         << 1 /*'section'*/;
     return false;
   }
   return true;
@@ -3202,7 +3202,7 @@ static void handleInitPriorityAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     S.Diag(AL.getLoc(), diag::warn_attribute_ignored) << AL.getName();
     return;
   }
-  
+
   if (S.getCurFunctionOrMethodDecl()) {
     S.Diag(AL.getLoc(), diag::err_init_priority_object_attr);
     AL.setInvalid();
@@ -3280,10 +3280,10 @@ static void handleFormatAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 
   // Check for supported formats.
   FormatAttrKind Kind = getFormatAttrKind(Format);
-  
+
   if (Kind == IgnoredFormat)
     return;
-  
+
   if (Kind == InvalidFormat) {
     S.Diag(AL.getLoc(), diag::warn_attribute_type_not_supported)
       << AL.getName() << II->getName();
@@ -3465,7 +3465,7 @@ static void handleAnnotateAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     if (I->getAnnotation() == Str)
       return;
   }
-  
+
   D->addAttr(::new (S.Context)
              AnnotateAttr(AL.getRange(), S.Context, Str,
                           AL.getAttributeSpellingListIndex()));
@@ -4606,7 +4606,7 @@ static void handleTypeTagForDatatypeAttr(Sema &S, Decl *D,
       << AL.getName() << 1 << AANT_ArgumentIdentifier;
     return;
   }
-  
+
   if (!checkAttributeNumArgs(S, AL, 1))
     return;
 
@@ -4830,7 +4830,7 @@ static void handleObjCReturnsInnerPointerAttr(Sema &S, Decl *D,
                                               const ParsedAttr &Attrs) {
   const int EP_ObjCMethod = 1;
   const int EP_ObjCProperty = 2;
-  
+
   SourceLocation loc = Attrs.getLoc();
   QualType resultType;
   if (isa<ObjCMethodDecl>(D))
@@ -4898,7 +4898,7 @@ static void handleObjCBridgeAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       return;
     }
   }
-  
+
   D->addAttr(::new (S.Context)
              ObjCBridgeAttr(AL.getRange(), S.Context, Parm->Ident,
                            AL.getAttributeSpellingListIndex()));
@@ -4912,7 +4912,7 @@ static void handleObjCBridgeMutableAttr(Sema &S, Decl *D,
     S.Diag(D->getLocStart(), diag::err_objc_attr_not_id) << AL.getName() << 0;
     return;
   }
-  
+
   D->addAttr(::new (S.Context)
              ObjCBridgeMutableAttr(AL.getRange(), S.Context, Parm->Ident,
                             AL.getAttributeSpellingListIndex()));
@@ -5206,7 +5206,7 @@ static void handleMSP430InterruptAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   if (!AL.isArgExpr(0)) {
     S.Diag(AL.getLoc(), diag::err_attribute_argument_type) << AL.getName()
       << AANT_ArgumentIntegerConstant;
-    return;    
+    return;
   }
 
   // FIXME: Check for decl - it should be void ()(void).
