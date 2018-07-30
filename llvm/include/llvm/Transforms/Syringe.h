@@ -1,3 +1,6 @@
+#ifndef LLVM_TRANSFORMS_IPO_H
+#define LLVM_TRANSFORMS_IPO_H
+
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
@@ -7,13 +10,13 @@ class ModulePass;
 
 void initializeSyringe(PassRegistry &Registry);
 
-class Syringe : public ModulePass {
+class SyringePass : public ModulePass {
 public:
   /// pass identification
   static char ID;
 
-  Syringe();
-  virtual ~Syringe() = default;
+  SyringePass();
+  virtual ~SyringePass() = default;
 
   /// Specify pass name for debug output
   StringRef getPassName() const override;
@@ -28,3 +31,5 @@ private:
   /* data */
 };
 } // namespace llvm
+
+#endif // Include Guard
