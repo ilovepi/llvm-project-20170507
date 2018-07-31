@@ -48,3 +48,4 @@ autoconf/autom4te.cache
 # VS2017 and VSCode config files.
 .vscode
 .vs
+.idea
