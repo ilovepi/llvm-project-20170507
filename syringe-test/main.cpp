@@ -11,12 +11,12 @@ int main()
     //__syringe_register((void*)hello,(void*) hello_syringe_impl,(void*) injected,(void**) &_Z17hello_syringe_ptr);
     //init(false);
     hello();
-    goodbye();
+    //goodbye();
 
     //init(true);
     ToggleImpl(hello);
     hello();
-    goodbye();
+    //goodbye();
     ToggleImpl(hello);
     hello();
 
