@@ -1124,6 +1124,18 @@ def fcf_protection : Flag<["-"], "fcf-protection">, Group<f_Group>, Flags<[CoreO
   Alias<fcf_protection_EQ>, AliasArgs<["full"]>,
   HelpText<"Enable cf-protection in 'full' mode">;
 
+def fsyringe : Flag<["-"], "fsyringe">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Generate XRay instrumentation sleds on function entry and exit">;
+def fnosyringe : Flag<["-"], "fno-syringe">, Group<f_Group>,
+  Flags<[CC1Option]>;
+
+def fsyringe_link_deps : Flag<["-"], "fsyringe-link-deps">, Group<f_Group>,
+  Flags<[CC1Option]>,
+  HelpText<"Tells clang to add the link dependencies for XRay.">;
+def fnosyringe_link_deps : Flag<["-"], "fnosyringe-link-deps">, Group<f_Group>,
+  Flags<[CC1Option]>;
+
 def fxray_instrument : Flag<["-"], "fxray-instrument">, Group<f_Group>,
   Flags<[CC1Option]>,
   HelpText<"Generate XRay instrumentation sleds on function entry and exit">;
@@ -1335,6 +1347,10 @@ def fno_diagnostics_show_hotness : Flag<["-"], "fno-diagnostics-show-hotness">, 
 def fno_diagnostics_show_option : Flag<["-"], "fno-diagnostics-show-option">, Group<f_Group>;
 def fno_diagnostics_show_note_include_stack : Flag<["-"], "fno-diagnostics-show-note-include-stack">,
     Flags<[CC1Option]>, Group<f_Group>;
+def fdigraphs : Flag<["-"], "fdigraphs">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Enable alternative token representations '<:', ':>', '<%', '%>', '%:', '%:%:' (default)">;
+def fno_digraphs : Flag<["-"], "fno-digraphs">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Disallow alternative token representations '<:', ':>', '<%', '%>', '%:', '%:%:'">;
 def fno_declspec : Flag<["-"], "fno-declspec">, Group<f_clang_Group>,
   HelpText<"Disallow __declspec as a keyword">, Flags<[CC1Option]>;
 def fno_dollars_in_identifiers : Flag<["-"], "fno-dollars-in-identifiers">, Group<f_Group>,

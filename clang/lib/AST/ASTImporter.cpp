@@ -228,6 +228,7 @@ namespace clang {
     void ImportDeclarationNameLoc(const DeclarationNameInfo &From,
                                   DeclarationNameInfo& To);
     void ImportDeclContext(DeclContext *FromDC, bool ForceImport = false);
+    void ImportImplicitMethods(const CXXRecordDecl *From, CXXRecordDecl *To);
 
     bool ImportCastPath(CastExpr *E, CXXCastPath &Path);
 
@@ -294,6 +295,7 @@ namespace clang {
 
     bool ImportTemplateInformation(FunctionDecl *FromFD, FunctionDecl *ToFD);
 
+    bool IsStructuralMatch(Decl *From, Decl *To, bool Complain);
     bool IsStructuralMatch(RecordDecl *FromRecord, RecordDecl *ToRecord,
                            bool Complain = true);
     bool IsStructuralMatch(VarDecl *FromVar, VarDecl *ToVar,
@@ -1253,6 +1255,16 @@ void ASTNodeImporter::ImportDeclContext(DeclContext *FromDC, bool ForceImport) {
     Importer.Import(From);
 }
 
+void ASTNodeImporter::ImportImplicitMethods(
+    const CXXRecordDecl *From, CXXRecordDecl *To) {
+  assert(From->isCompleteDefinition() && To->getDefinition() == To &&
+      "Import implicit methods to or from non-definition");
+  
+  for (CXXMethodDecl *FromM : From->methods())
+    if (FromM->isImplicit())
+      Importer.Import(FromM);
+}
+
 static void setTypedefNameForAnonDecl(TagDecl *From, TagDecl *To,
                                ASTImporter &Importer) {
   if (TypedefNameDecl *FromTypedef = From->getTypedefNameForAnonDecl()) {
@@ -1581,7 +1593,15 @@ getStructuralEquivalenceKind(const ASTImporter &Importer) {
                                     : StructuralEquivalenceKind::Default;
 }
 
-bool ASTNodeImporter::IsStructuralMatch(RecordDecl *FromRecord, 
+bool ASTNodeImporter::IsStructuralMatch(Decl *From, Decl *To, bool Complain) {
+  StructuralEquivalenceContext Ctx(
+      Importer.getFromContext(), Importer.getToContext(),
+      Importer.getNonEquivalentDecls(), getStructuralEquivalenceKind(Importer),
+      false, Complain);
+  return Ctx.IsEquivalent(From, To);
+}
+
+bool ASTNodeImporter::IsStructuralMatch(RecordDecl *FromRecord,
                                         RecordDecl *ToRecord, bool Complain) {
   // Eliminate a potential failure point where we attempt to re-import
   // something we're trying to import while completing ToRecord.
@@ -1597,7 +1617,7 @@ bool ASTNodeImporter::IsStructuralMatch(RecordDecl *FromRecord,
                                    Importer.getNonEquivalentDecls(),
                                    getStructuralEquivalenceKind(Importer),
                                    false, Complain);
-  return Ctx.IsStructurallyEquivalent(FromRecord, ToRecord);
+  return Ctx.IsEquivalent(FromRecord, ToRecord);
 }
 
 bool ASTNodeImporter::IsStructuralMatch(VarDecl *FromVar, VarDecl *ToVar,
@@ -1606,14 +1626,14 @@ bool ASTNodeImporter::IsStructuralMatch(VarDecl *FromVar, VarDecl *ToVar,
       Importer.getFromContext(), Importer.getToContext(),
       Importer.getNonEquivalentDecls(), getStructuralEquivalenceKind(Importer),
       false, Complain);
-  return Ctx.IsStructurallyEquivalent(FromVar, ToVar);
+  return Ctx.IsEquivalent(FromVar, ToVar);
 }
 
 bool ASTNodeImporter::IsStructuralMatch(EnumDecl *FromEnum, EnumDecl *ToEnum) {
   StructuralEquivalenceContext Ctx(
       Importer.getFromContext(), Importer.getToContext(),
       Importer.getNonEquivalentDecls(), getStructuralEquivalenceKind(Importer));
-  return Ctx.IsStructurallyEquivalent(FromEnum, ToEnum);
+  return Ctx.IsEquivalent(FromEnum, ToEnum);
 }
 
 bool ASTNodeImporter::IsStructuralMatch(FunctionTemplateDecl *From,
@@ -1622,7 +1642,7 @@ bool ASTNodeImporter::IsStructuralMatch(FunctionTemplateDecl *From,
       Importer.getFromContext(), Importer.getToContext(),
       Importer.getNonEquivalentDecls(), getStructuralEquivalenceKind(Importer),
       false, false);
-  return Ctx.IsStructurallyEquivalent(From, To);
+  return Ctx.IsEquivalent(From, To);
 }
 
 bool ASTNodeImporter::IsStructuralMatch(FunctionDecl *From, FunctionDecl *To) {
@@ -1630,7 +1650,7 @@ bool ASTNodeImporter::IsStructuralMatch(FunctionDecl *From, FunctionDecl *To) {
       Importer.getFromContext(), Importer.getToContext(),
       Importer.getNonEquivalentDecls(), getStructuralEquivalenceKind(Importer),
       false, false);
-  return Ctx.IsStructurallyEquivalent(From, To);
+  return Ctx.IsEquivalent(From, To);
 }
 
 bool ASTNodeImporter::IsStructuralMatch(EnumConstantDecl *FromEC,
@@ -1649,7 +1669,7 @@ bool ASTNodeImporter::IsStructuralMatch(ClassTemplateDecl *From,
                                    Importer.getToContext(),
                                    Importer.getNonEquivalentDecls(),
                                    getStructuralEquivalenceKind(Importer));
-  return Ctx.IsStructurallyEquivalent(From, To);
+  return Ctx.IsEquivalent(From, To);
 }
 
 bool ASTNodeImporter::IsStructuralMatch(VarTemplateDecl *From,
@@ -1658,7 +1678,7 @@ bool ASTNodeImporter::IsStructuralMatch(VarTemplateDecl *From,
                                    Importer.getToContext(),
                                    Importer.getNonEquivalentDecls(),
                                    getStructuralEquivalenceKind(Importer));
-  return Ctx.IsStructurallyEquivalent(From, To);
+  return Ctx.IsEquivalent(From, To);
 }
 
 Decl *ASTNodeImporter::VisitDecl(Decl *D) {
@@ -2199,8 +2219,19 @@ Decl *ASTNodeImporter::VisitRecordDecl(RecordDecl *D) {
             // The record types structurally match, or the "from" translation
             // unit only had a forward declaration anyway; call it the same
             // function.
-            // FIXME: For C++, we should also merge methods here.
-            return Importer.MapImported(D, FoundDef);
+            // FIXME: Structural equivalence check should check for same
+            // user-defined methods.
+            Importer.MapImported(D, FoundDef);
+            if (const auto *DCXX = dyn_cast<CXXRecordDecl>(D)) {
+              auto *FoundCXX = dyn_cast<CXXRecordDecl>(FoundDef);
+              assert(FoundCXX && "Record type mismatch");
+
+              if (D->isCompleteDefinition() && !Importer.isMinimalImport())
+                // FoundDef may not have every implicit method that D has
+                // because implicit methods are created only if they are used.
+                ImportImplicitMethods(DCXX, FoundCXX);
+            }
+            return FoundDef;
           }
         } else if (!D->isCompleteDefinition()) {
           // We have a forward declaration of this type, so adopt that forward
@@ -2517,6 +2548,7 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
     return ToD;
 
   const FunctionDecl *FoundByLookup = nullptr;
+  FunctionTemplateDecl *FromFT = D->getDescribedFunctionTemplate();
 
   // If this is a function template specialization, then try to find the same
   // existing specialization in the "to" context. The localUncachedLookup
@@ -2542,6 +2574,14 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
     for (auto *FoundDecl : FoundDecls) {
       if (!FoundDecl->isInIdentifierNamespace(IDNS))
         continue;
+
+      // If template was found, look at the templated function.
+      if (FromFT) {
+        if (auto *Template = dyn_cast<FunctionTemplateDecl>(FoundDecl))
+          FoundDecl = Template->getTemplatedDecl();
+        else
+          continue;
+      }
 
       if (auto *FoundFunction = dyn_cast<FunctionDecl>(FoundDecl)) {
         if (FoundFunction->hasExternalFormalLinkage() &&
@@ -2717,6 +2757,11 @@ Decl *ASTNodeImporter::VisitFunctionDecl(FunctionDecl *D) {
       return nullptr;
     ToFunction->setType(T);
   }
+
+  // Import the describing template function, if any.
+  if (FromFT)
+    if (!Importer.Import(FromFT))
+      return nullptr;
 
   if (D->doesThisDeclarationHaveABody()) {
     if (Stmt *FromBody = D->getBody()) {
@@ -2942,15 +2987,11 @@ Decl *ASTNodeImporter::VisitFriendDecl(FriendDecl *D) {
   // FriendDecl is not a NamedDecl so we cannot use localUncachedLookup.
   auto *RD = cast<CXXRecordDecl>(DC);
   FriendDecl *ImportedFriend = RD->getFirstFriend();
-  StructuralEquivalenceContext Context(
-      Importer.getFromContext(), Importer.getToContext(),
-      Importer.getNonEquivalentDecls(), getStructuralEquivalenceKind(Importer),
-      false, false);
 
   while (ImportedFriend) {
     if (D->getFriendDecl() && ImportedFriend->getFriendDecl()) {
-      if (Context.IsStructurallyEquivalent(D->getFriendDecl(),
-                                           ImportedFriend->getFriendDecl()))
+      if (IsStructuralMatch(D->getFriendDecl(), ImportedFriend->getFriendDecl(),
+                            /*Complain=*/false))
         return Importer.MapImported(D, ImportedFriend);
 
     } else if (D->getFriendType() && ImportedFriend->getFriendType()) {
@@ -7585,5 +7626,5 @@ bool ASTImporter::IsStructurallyEquivalent(QualType From, QualType To,
   StructuralEquivalenceContext Ctx(FromContext, ToContext, NonEquivalentDecls,
                                    getStructuralEquivalenceKind(*this), false,
                                    Complain);
-  return Ctx.IsStructurallyEquivalent(From, To);
+  return Ctx.IsEquivalent(From, To);
 }

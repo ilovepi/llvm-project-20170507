@@ -24,10 +24,10 @@ def AllocSize : EnumAttr<"allocsize">;
 def AlwaysInline : EnumAttr<"alwaysinline">;
 
 /// Syringe target function
-def SyringeInjectionSite: EnumAttr<"syringe-site">;
+/*def SyringeInjectionSite: EnumAttr<"syringe_site">;*/
 
 /// Syringe injeciton payload
-def SyringePayload: EnumAttr<"syringe-payload">;
+/*def SyringePayload: EnumAttr<"syringe_payload">;*/
 
 /// Function can access memory only using pointers based on its arguments.
 def ArgMemOnly : EnumAttr<"argmemonly">;

@@ -33,6 +33,8 @@ option(COMPILER_RT_BUILD_SANITIZERS "Build sanitizers" ON)
 mark_as_advanced(COMPILER_RT_BUILD_SANITIZERS)
 option(COMPILER_RT_BUILD_XRAY "Build xray" ON)
 mark_as_advanced(COMPILER_RT_BUILD_XRAY)
+option(COMPILER_RT_BUILD_SYRINGE "Build syringe" ON)
+mark_as_advanced(COMPILER_RT_BUILD_SYRINGE)
 option(COMPILER_RT_BUILD_LIBFUZZER "Build libFuzzer" ON)
 mark_as_advanced(COMPILER_RT_BUILD_LIBFUZZER)
 option(COMPILER_RT_BUILD_PROFILE "Build profile runtime" ON)
@@ -157,16 +159,13 @@ else()
   set(SANITIZER_CXX_ABI_SYSTEM 1)
 endif()
 
-set(COMPILER_RT_RUNTIME "default" CACHE STRING
-    "Compiler runtime to use.")
-
-if (COMPILER_RT_RUNTIME STREQUAL "default")
-  if (FUCHSIA)
-    set(COMPILER_RT_RUNTIME_LIBRARY "builtins")
-  endif()
-else()
-  set(COMPILER_RT_RUNTIME_LIBRARY "${COMPILER_RT_RUNTIME}")
+set(DEFAULT_COMPILER_RT_USE_BUILTINS_LIBRARY OFF)
+if (FUCHSIA)
+  set(DEFAULT_COMPILER_RT_USE_BUILTINS_LIBRARY ON)
 endif()
+
+option(COMPILER_RT_USE_BUILTINS_LIBRARY
+  "Use compiler-rt builtins instead of libgcc" ${DEFAULT_COMPILER_RT_USE_BUILTINS_LIBRARY})
 
 include(config-ix)
 
@@ -316,7 +315,7 @@ append_list_if(COMPILER_RT_HAS_WD4800_FLAG /wd4800 SANITIZER_COMMON_CFLAGS)
 # Set common link flags.
 append_list_if(COMPILER_RT_HAS_NODEFAULTLIBS_FLAG -nodefaultlibs SANITIZER_COMMON_LINK_FLAGS)
 
-if (COMPILER_RT_RUNTIME_LIBRARY STREQUAL "builtins")
+if (COMPILER_RT_USE_BUILTINS_LIBRARY)
   list(APPEND SANITIZER_COMMON_LINK_LIBS ${COMPILER_RT_BUILTINS_LIBRARY})
 else()
   if (ANDROID)

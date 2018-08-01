@@ -2872,6 +2872,8 @@ Instruction *InstCombiner::foldICmpInstWithConstantNotInt(ICmpInst &I) {
 /// Folds:
 ///   x & (-1 >> y) SrcPred x    to    x DstPred (-1 >> y)
 /// The Mask can be a constant, too.
+/// For some predicates, the operands are commutative.
+/// For others, x can only be on a specific side.
 static Value *foldICmpWithLowBitMaskedVal(ICmpInst &I,
                                           InstCombiner::BuilderTy &Builder) {
   ICmpInst::Predicate SrcPred;
@@ -2892,12 +2894,121 @@ static Value *foldICmpWithLowBitMaskedVal(ICmpInst &I,
     //  x & (-1 >> y) != x    ->    x u> (-1 >> y)
     DstPred = ICmpInst::Predicate::ICMP_UGT;
     break;
-  // TODO: more folds are possible, https://bugs.llvm.org/show_bug.cgi?id=38123
+  case ICmpInst::Predicate::ICMP_UGT:
+    //  x u> x & (-1 >> y)    ->    x u> (-1 >> y)
+    assert(X == I.getOperand(0) && "instsimplify took care of commut. variant");
+    DstPred = ICmpInst::Predicate::ICMP_UGT;
+    break;
+  case ICmpInst::Predicate::ICMP_UGE:
+    //  x & (-1 >> y) u>= x    ->    x u<= (-1 >> y)
+    assert(X == I.getOperand(1) && "instsimplify took care of commut. variant");
+    DstPred = ICmpInst::Predicate::ICMP_ULE;
+    break;
+  case ICmpInst::Predicate::ICMP_ULT:
+    //  x & (-1 >> y) u< x    ->    x u> (-1 >> y)
+    assert(X == I.getOperand(1) && "instsimplify took care of commut. variant");
+    DstPred = ICmpInst::Predicate::ICMP_UGT;
+    break;
+  case ICmpInst::Predicate::ICMP_ULE:
+    //  x u<= x & (-1 >> y)    ->    x u<= (-1 >> y)
+    assert(X == I.getOperand(0) && "instsimplify took care of commut. variant");
+    DstPred = ICmpInst::Predicate::ICMP_ULE;
+    break;
+  case ICmpInst::Predicate::ICMP_SGT:
+    //  x s> x & (-1 >> y)    ->    x s> (-1 >> y)
+    if (X != I.getOperand(0)) // X must be on LHS of comparison!
+      return nullptr;         // Ignore the other case.
+    DstPred = ICmpInst::Predicate::ICMP_SGT;
+    break;
+  case ICmpInst::Predicate::ICMP_SGE:
+    //  x & (-1 >> y) s>= x    ->    x s<= (-1 >> y)
+    if (X != I.getOperand(1)) // X must be on RHS of comparison!
+      return nullptr;         // Ignore the other case.
+    DstPred = ICmpInst::Predicate::ICMP_SLE;
+    break;
+  case ICmpInst::Predicate::ICMP_SLT:
+    //  x & (-1 >> y) s< x    ->    x s> (-1 >> y)
+    if (X != I.getOperand(1)) // X must be on RHS of comparison!
+      return nullptr;         // Ignore the other case.
+    DstPred = ICmpInst::Predicate::ICMP_SGT;
+    break;
+  case ICmpInst::Predicate::ICMP_SLE:
+    //  x s<= x & (-1 >> y)    ->    x s<= (-1 >> y)
+    if (X != I.getOperand(0)) // X must be on LHS of comparison!
+      return nullptr;         // Ignore the other case.
+    DstPred = ICmpInst::Predicate::ICMP_SLE;
+    break;
+  default:
+    llvm_unreachable("All possible folds are handled.");
+  }
+
+  return Builder.CreateICmp(DstPred, X, M);
+}
+
+/// Some comparisons can be simplified.
+/// In this case, we are looking for comparisons that look like
+/// a check for a lossy signed truncation.
+/// Folds:   (MaskedBits is a constant.)
+///   ((%x << MaskedBits) a>> MaskedBits) SrcPred %x
+/// Into:
+///   (add %x, (1 << (KeptBits-1))) DstPred (1 << KeptBits)
+/// Where  KeptBits = bitwidth(%x) - MaskedBits
+static Value *
+foldICmpWithTruncSignExtendedVal(ICmpInst &I,
+                                 InstCombiner::BuilderTy &Builder) {
+  ICmpInst::Predicate SrcPred;
+  Value *X;
+  const APInt *C0, *C1; // FIXME: non-splats, potentially with undef.
+  // We are ok with 'shl' having multiple uses, but 'ashr' must be one-use.
+  if (!match(&I, m_c_ICmp(SrcPred,
+                          m_OneUse(m_AShr(m_Shl(m_Value(X), m_APInt(C0)),
+                                          m_APInt(C1))),
+                          m_Deferred(X))))
+    return nullptr;
+
+  // Potential handling of non-splats: for each element:
+  //  * if both are undef, replace with constant 0.
+  //    Because (1<<0) is OK and is 1, and ((1<<0)>>1) is also OK and is 0.
+  //  * if both are not undef, and are different, bailout.
+  //  * else, only one is undef, then pick the non-undef one.
+
+  // The shift amount must be equal.
+  if (*C0 != *C1)
+    return nullptr;
+  const uint64_t MaskedBits = C0->getZExtValue();
+  assert(MaskedBits && "shift of %x by zero should be folded to %x already.");
+
+  ICmpInst::Predicate DstPred;
+  switch (SrcPred) {
+  case ICmpInst::Predicate::ICMP_EQ:
+    // ((%x << MaskedBits) a>> MaskedBits) == %x
+    //   =>
+    // (add %x, (1 << (KeptBits-1))) u< (1 << KeptBits)
+    DstPred = ICmpInst::Predicate::ICMP_ULT;
+    break;
+  case ICmpInst::Predicate::ICMP_NE:
+    // ((%x << MaskedBits) a>> MaskedBits) != %x
+    //   =>
+    // (add %x, (1 << (KeptBits-1))) u>= (1 << KeptBits)
+    DstPred = ICmpInst::Predicate::ICMP_UGE;
+    break;
+  // FIXME: are more folds possible?
   default:
     return nullptr;
   }
 
-  return Builder.CreateICmp(DstPred, X, M);
+  const uint64_t XBitWidth = C0->getBitWidth();
+  const uint64_t KeptBits = XBitWidth - MaskedBits;
+  const uint64_t ICmpCst = (uint64_t)1 << KeptBits; // (1 << KeptBits)
+  const uint64_t AddCst = ICmpCst >> 1;   // (1 << (KeptBits-1))
+
+  auto *XType = X->getType();
+  // (add %x, (1 << (KeptBits-1)))
+  Value *T0 = Builder.CreateAdd(X, ConstantInt::get(XType, AddCst));
+  // add %x, (1 << (KeptBits-1))) DstPred (1 << KeptBits)
+  Value *T1 = Builder.CreateICmp(DstPred, T0, ConstantInt::get(XType, ICmpCst));
+
+  return T1;
 }
 
 /// Try to fold icmp (binop), X or icmp X, (binop).
@@ -3109,8 +3220,8 @@ Instruction *InstCombiner::foldICmpBinOp(ICmpInst &I) {
   if (NoOp0WrapProblem && ICmpInst::isSigned(Pred)) {
     Value *X;
     if (match(BO0, m_Neg(m_Value(X))))
-      if (ConstantInt *RHSC = dyn_cast<ConstantInt>(Op1))
-        if (!RHSC->isMinValue(/*isSigned=*/true))
+      if (Constant *RHSC = dyn_cast<Constant>(Op1))
+        if (RHSC->isNotMinSignedValue())
           return new ICmpInst(I.getSwappedPredicate(), X,
                               ConstantExpr::getNeg(RHSC));
   }
@@ -3238,6 +3349,9 @@ Instruction *InstCombiner::foldICmpBinOp(ICmpInst &I) {
   }
 
   if (Value *V = foldICmpWithLowBitMaskedVal(I, Builder))
+    return replaceInstUsesWith(I, V);
+
+  if (Value *V = foldICmpWithTruncSignExtendedVal(I, Builder))
     return replaceInstUsesWith(I, V);
 
   return nullptr;
