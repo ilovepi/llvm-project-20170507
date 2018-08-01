@@ -14,9 +14,6 @@
 
 #include "llvm/Transforms/Syringe.h"
 #include "llvm-c/Initialization.h"
-#include "llvm/InitializePasses.h"
-#include "llvm/PassRegistry.h"
-
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/IR/Attributes.h"
@@ -25,33 +22,34 @@
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
+#include "llvm/PassRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
 using namespace llvm;
+
 static const char *const kSyringeModuleCtorName = "syringe.module_ctor";
 static const char *const kSyringeInitName = "__syringe_register";
 
-static bool doInjectionForModule(Module& M){
+static bool doInjectionForModule(Module &M) {
   for (Function &F : M) {
-    if (F.hasFnAttribute(Attribute::SyringePayload) || F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
+    if (F.hasFnAttribute("SyringePayload") ||
+        F.hasFnAttribute("SyringeInjectionSite")) {
       return true;
     }
   }
-    return false;
+  return false;
 }
 
-
-PreservedAnalyses SyringePass::run(Module &M,
-                                          ModuleAnalysisManager &AM) {
+PreservedAnalyses SyringePass::run(Module &M, ModuleAnalysisManager &AM) {
   if (!doInjectionForModule(M))
     return PreservedAnalyses::all();
 
   return PreservedAnalyses::none();
 }
-
 
 /// initializeSyringe - Initialize all passes in the Syringe library.
 void initializeSyringeLegacyPass(PassRegistry &Registry) {
@@ -80,7 +78,7 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
 
 /// create funciton stub for behavior injection
 bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
-  errs() << "Running Behavior Injection Pass\n";
+  // errs() << "Running Behavior Injection Pass\n";
   bool ret = false;
 
   Function *target = nullptr;
@@ -195,5 +193,5 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 ModulePass *llvm::createSyringe() { return new SyringeLegacyPass(); }
 char SyringeLegacyPass::ID;
 
-INITIALIZE_PASS(SyringeLegacyPass, "syringe", "Syringe: dynamic behavior injection.",
-                false, false)
+INITIALIZE_PASS(SyringeLegacyPass, "syringe",
+                "Syringe: dynamic behavior injection.", false, false)
