@@ -1,5 +1,5 @@
-#ifndef SYRINGE_RT_H_
-#define SYRINGE_RT_H_ 1
+#ifndef SYRINGE_SYRINGE_RT_H
+#define SYRINGE_SYRINGE_RT_H 1
 
 #include "syringe/injection_data.h"
 
@@ -8,45 +8,43 @@
 
 namespace __syringe {
 
-extern std::vector<InjectionData> global_syringe_data;
+extern std::vector<InjectionData> GlobalSyringeData;
 
-template <typename T> InjectionData *FindImplPointer(T orig_func) {
-  return &*std::find_if(global_syringe_data.begin(), global_syringe_data.end(),
-                        [orig_func](InjectionData it) -> bool {
-                          return it.orig_func == orig_func;
-                        });
+template <typename T> InjectionData *findImplPointer(T OrigFunc) {
+  return &*std::find_if(
+      GlobalSyringeData.begin(), GlobalSyringeData.end(),
+      [OrigFunc](InjectionData It) -> bool { return It.OrigFunc == OrigFunc; });
 }
 
 template <typename T, typename R>
-void RegisterInjection(T orig_func, T stub_impl, T detour_func, R impl_ptr) {
-  auto it = FindImplPointer(orig_func);
-  if (it == nullptr) {
-    global_syringe_data.emplace_back(orig_func, stub_impl, detour_func,
-                                     impl_ptr);
+void registerInjection(T OrigFunc, T StubImpl, T DetourFunc, R ImplPtr) {
+  auto It = findImplPointer(OrigFunc);
+  if (It == nullptr) {
+    GlobalSyringeData.emplace_back(OrigFunc, StubImpl, DetourFunc, ImplPtr);
   }
 }
 
-template <typename T> bool ToggleImpl(T orig_func) {
-  auto ptr = FindImplPointer(orig_func);
-  if (!ptr) {
+template <typename T> bool toggleImpl(T OrigFunc) {
+  auto Ptr = findImplPointer(OrigFunc);
+  if (!Ptr) {
     return false;
   }
 
-  if (*(ptr->impl_ptr) == ptr->stub_impl) {
-    *(ptr->impl_ptr) = ptr->detour_func;
+  if (*(Ptr->ImplPtr) == Ptr->StubImpl) {
+    *(Ptr->ImplPtr) = Ptr->DetourFunc;
   } else {
-    *(ptr->impl_ptr) = ptr->stub_impl;
+    *(Ptr->ImplPtr) = Ptr->StubImpl;
   }
   return true;
 }
 
-template <typename T> bool ChangeImpl(T orig_func, T new_impl) {
-  auto ptr = FindImplPointer(orig_func);
-  if (!ptr) {
+template <typename T> bool changeImpl(T OrigFunc, T NewImpl) {
+  auto Ptr = findImplPointer(OrigFunc);
+  if (!Ptr) {
     return false;
   }
 
-  *(ptr->impl_ptr) = new_impl;
+  *(Ptr->ImplPtr) = NewImpl;
   return true;
 }
 
@@ -54,8 +52,8 @@ template <typename T> bool ChangeImpl(T orig_func, T new_impl) {
 
 extern "C" {
 
-void __syringe_register(void *orig_func, void *stub_impl, void *detour_func,
-                        void **impl_ptr);
+void __syringe_register(void *OrigFunc, void *StubImpl, void *DetourFunc,
+                        void **ImplPtr);
 }
 
-#endif /* ifndef SYRINGE_RT_H_ */
+#endif // SYRINGE_SYRINGE_RT_H

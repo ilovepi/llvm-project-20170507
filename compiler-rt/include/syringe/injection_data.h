@@ -1,15 +1,16 @@
-#ifndef INJECTION_DATA_H_
-#define INJECTION_DATA_H_ 1
+#ifndef SYRINGE_INJECTION_DATA_H
+#define SYRINGE_INJECTION_DATA_H 1
 
 struct InjectionData {
-  void *orig_func;
-  void *stub_impl;
-  void *detour_func;
-  void **impl_ptr;
+  void *OrigFunc;
+  void *StubImpl;
+  void *DetourFunc;
+  void **ImplPtr;
   template <typename T, typename R>
-  InjectionData(T orig_func, T stub_impl, T detour_func, R impl_ptr)
-      : orig_func((void *)orig_func), stub_impl((void *)stub_impl),
-        detour_func((void *)detour_func), impl_ptr((void **)impl_ptr) {}
+  InjectionData(T OrigFunction, T StubImplementation, T DetourFunction,
+                R ImplPointer)
+      : OrigFunc((void *)OrigFunction), StubImpl((void *)StubImplementation),
+        DetourFunc((void *)DetourFunction), ImplPtr((void **)ImplPointer) {}
 };
 
-#endif
+#endif // SYRINGE_INJECTION_DATA_H
