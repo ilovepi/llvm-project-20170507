@@ -738,7 +738,7 @@ bool tools::addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
 }
 
 bool tools::addSyringeRuntime(const ToolChain& TC, const ArgList &Args, ArgStringList &CmdArgs) {
-    llvm::errs() << "Adding Syringe Runtime Libraries\n";
+    //llvm::errs() << "Adding Syringe Runtime Libraries\n";
   if (Args.hasArg(options::OPT_shared))
     return false;
 
