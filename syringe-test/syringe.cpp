@@ -4,6 +4,6 @@
 extern int hello_count;
 [[clang::syringe_injection_site]] void hello() {
   std::cout << "Hello World!" << std::endl;
-  hello_count++;
+  ++hello_count;
 }
 
