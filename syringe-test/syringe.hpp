@@ -3,6 +3,6 @@
 
 [[clang::syringe_injection_site]] void hello();
 
-[[clang::syringe_payload]] void injected();
+[[clang::syringe_payload("_Z5hellov")]] void injected();
 
 #endif

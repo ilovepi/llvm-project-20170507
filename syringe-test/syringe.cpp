@@ -6,6 +6,6 @@
   std::cout << "Hello World!" << std::endl;
 }
 
-[[clang::syringe_payload]] void injected() {
+[[clang::syringe_payload("_Z5hellov")]] void injected() {
   std::cout << "I've Hijacked the World!" << std::endl;
 }
