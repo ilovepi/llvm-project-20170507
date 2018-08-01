@@ -9,11 +9,11 @@ EMIT_LL=-S -emit-llvm $(OPTIMIZE)
 EMIT_ASM=-S $(OPTIMIZE)
 TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt syringe_opt.bc *.o *.ll *.a
 FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE) 
-STD=-stdlib=libc++
 #OPTIMIZE=-O0
 #VERBOSE=-v
 DEBUG=-g
 LIBS= -lc++abi -I $(HOME)/clang-dev/include/c++/v1  -L $(HOME)/clang-dev/lib
+STD=-stdlib=libc++
 export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
 
 .PHONEY: $(TARGETS) test clean opt
