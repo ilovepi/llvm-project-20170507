@@ -11,14 +11,14 @@ int hello_count = 0;
 int main()
 {
     // ensure that Syringe metadata is initialized
-    assert(!__syringe::global_syringe_data.empty());
+    assert(!__syringe::GlobalSyringeData.empty());
 
     hello();
     assert( hello_count == 1 && "Hello Count incorrect");
-    ToggleImpl(hello);
+    toggleImpl(hello);
     hello();
     assert( injected_count == 1 && "Hello Count incorrect");
-    ToggleImpl(hello);
+    toggleImpl(hello);
     hello();
     assert( hello_count == 2 && "Hello Count incorrect");
 

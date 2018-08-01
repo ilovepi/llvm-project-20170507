@@ -6,14 +6,14 @@
 
 namespace __syringe {
 
-std::vector<InjectionData> global_syringe_data;
+std::vector<InjectionData> GlobalSyringeData;
 
 } // end namespace __syringe
 
 //extern "C" {
 
-void __syringe_register(void *orig_func, void *stub_impl, void *detour_func,
-                        void **impl_ptr) {
-    __syringe::RegisterInjection(orig_func, stub_impl, detour_func, impl_ptr);
+void __syringe_register(void *OrigFunc, void *StubImpl, void *DetourFunc,
+                        void **ImplPtr) {
+    __syringe::registerInjection(OrigFunc, StubImpl, DetourFunc, ImplPtr);
 }
 //}// end extern
