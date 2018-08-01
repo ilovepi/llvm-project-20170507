@@ -1444,8 +1444,8 @@ static bool isFuncOnlyAttr(Attribute::AttrKind Kind) {
   case Attribute::NoUnwind:
   case Attribute::NoInline:
   case Attribute::AlwaysInline:
-  case Attribute::SyringeInjectionSite:
-  case Attribute::SyringePayload:
+  //case Attribute::SyringeInjectionSite:
+  //case Attribute::SyringePayload:
   case Attribute::OptimizeForSize:
   case Attribute::StackProtect:
   case Attribute::StackProtectReq:
@@ -1579,11 +1579,11 @@ void Verifier::verifyParameterAttrs(AttributeSet Attrs, Type *Ty,
          "'noinline and alwaysinline' are incompatible!",
          V);
 
-  Assert(!(Attrs.hasAttribute(Attribute::SyringeInjectionSite) &&
-           Attrs.hasAttribute(Attribute::SyringePayload)),
-         "Attributes "
-         "'syringe-site and syringe-payload' are incompatible!",
-         V);
+  //Assert(!(Attrs.hasAttribute(Attribute::SyringeInjectionSite) &&
+           //Attrs.hasAttribute(Attribute::SyringePayload)),
+         //"Attributes "
+         //"'syringe-site and syringe-payload' are incompatible!",
+         //V);
 
   AttrBuilder IncompatibleAttrs = AttributeFuncs::typeIncompatible(Ty);
   Assert(!AttrBuilder(Attrs).overlaps(IncompatibleAttrs),
@@ -1726,9 +1726,9 @@ void Verifier::verifyFunctionAttrs(FunctionType *FT, AttributeList Attrs,
            Attrs.hasFnAttribute(Attribute::AlwaysInline)),
          "Attributes 'noinline and alwaysinline' are incompatible!", V);
 
-  Assert(!(Attrs.hasFnAttribute(Attribute::SyringeInjectionSite) &&
-           Attrs.hasFnAttribute(Attribute::SyringePayload)),
-         "Attributes 'syringe-site and syringe-payload' are incompatible!", V);
+  //Assert(!(Attrs.hasFnAttribute(Attribute::SyringeInjectionSite) &&
+           //Attrs.hasFnAttribute(Attribute::SyringePayload)),
+         //"Attributes 'syringe-site and syringe-payload' are incompatible!", V);
 
   if (Attrs.hasFnAttribute(Attribute::OptimizeNone)) {
     Assert(Attrs.hasFnAttribute(Attribute::NoInline),

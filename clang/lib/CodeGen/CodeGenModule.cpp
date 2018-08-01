@@ -1985,7 +1985,8 @@ bool CodeGenModule::imbueSyringeAttrs(llvm::Function *Fn) const {
     return false;
 
   // FIXME: Check that Injeciton site and payload are mutually exclusive
-  Fn->addFnAttr(llvm::Attribute::SyringeInjectionSite);
+  Fn->addFnAttr("SyringeInjectionSite");
+  //Fn->addFnAttr(llvm::Attribute::SyringeInjectionSite);
   return true;
 }
 

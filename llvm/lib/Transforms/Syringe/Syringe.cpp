@@ -66,7 +66,9 @@ void LLVMInitializeSyringe(LLVMPassRegistryRef R) {
 SyringeLegacyPass::SyringeLegacyPass() : ModulePass(ID) {}
 
 /// Specify pass name for debug output
-StringRef SyringeLegacyPass::getPassName() const { return "Syringe Instrumentation"; }
+StringRef SyringeLegacyPass::getPassName() const {
+  return "Syringe Instrumentation";
+}
 
 /// run module pass
 bool SyringeLegacyPass::runOnModule(Module &M) {
@@ -88,42 +90,52 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
   for (Function &F : M) {
     ret = true;
-    if (F.hasFnAttribute(Attribute::SyringePayload)) {
-      errs() << "Found Syringe Payload\n";
+    // if (F.hasFnAttribute(Attribute::SyringePayload)) {
+    if (F.hasFnAttribute("SyringePayload")) {
+      //errs() << "Found Syringe Payload\n";
+
+      if (F.hasFnAttribute("SyringeTargetFunction")) {
+         auto targetName = F.getFnAttribute("SyringeTargetFunction").getValueAsString();
+
       // create alias
-      auto alias = GlobalAlias::create("_Z18hello_detour_implv", &F);
+      auto alias = GlobalAlias::create(targetName + "$detour_impl", &F);
       alias->setVisibility(GlobalValue::VisibilityTypes::DefaultVisibility);
       detour = &F;
+      }
+
     }
   }
 
   for (Function &F : M) {
-    if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
-      errs() << "Found Syringe Injection Site\n";
+    // if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
+    if (F.hasFnAttribute("SyringeInjectionSite")) {
+      // errs() << "Found Syringe Injection Site\n";
       ret = true;
       ValueToValueMapTy VMap;
 
       // clone function
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
+      auto aliasName = F.getName().str() + "$detour_impl";
+      errs() << aliasName << "\n";
 
-      auto *internalAlias = M.getNamedAlias("_Z18hello_detour_implv");
+      auto *internalAlias = M.getNamedAlias(aliasName);
 
       if (internalAlias == nullptr) {
         auto aliasDecl = orc::cloneFunctionDecl(M, F, nullptr);
-        aliasDecl->setName("_Z18hello_detour_implv");
-        aliasDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
+        aliasDecl->setName(aliasName);
+        aliasDecl->removeFnAttr("SyringeInjectionSite");
         aliasDecl->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
       }
 
-      // cloneDecl->setName(F.getName() + "_syringe_impl");
-      cloneDecl->setName("_Z18hello_syringe_implv");
+       cloneDecl->setName(F.getName() + "$syringe_impl");
+      //cloneDecl->setName("_Z18hello_syringe_implv");
       orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
-      cloneDecl->removeFnAttr(Attribute::AttrKind::SyringeInjectionSite);
+      cloneDecl->removeFnAttr("SyringeInjectionSite");
       stub = cloneDecl;
 
       // create impl pointer
       auto SyringePtr = orc::createImplPointer(
-          *F.getType(), M, "_Z17hello_syringe_ptr", cloneDecl);
+          *F.getType(), M, F.getName() + "$syringe_ptr", cloneDecl);
       SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
       target = &F;
       ptr_syringe = SyringePtr;
