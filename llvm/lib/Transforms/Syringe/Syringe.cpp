@@ -185,13 +185,12 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
       // clone function
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
       auto aliasName = createAliasNameFromBase(F.getName());
-      errs() << aliasName << "\n";
+      //errs() << aliasName << "\n";
 
       Function *detourFunction;
       auto *internalAlias = M.getNamedAlias(aliasName);
 
       if (internalAlias == nullptr) {
-        errs() << "Made it here !!!\n";
         auto aliasDecl = orc::cloneFunctionDecl(M, F, nullptr);
         aliasDecl->setName(aliasName);
         aliasDecl->removeFnAttr("SyringeInjectionSite");
@@ -221,7 +220,6 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
   // if we've made a modification, add a global ctor entry for the function
   if (changedPayload) {
-    // errs() << "Made it to initialization !!!\n";
     createCtorInit(M, initData);
   }
 
