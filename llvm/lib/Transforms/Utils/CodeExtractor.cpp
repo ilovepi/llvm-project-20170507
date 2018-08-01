@@ -735,8 +735,8 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
         continue;
       // Those attributes should be safe to propagate to the extracted function.
       case Attribute::AlwaysInline:
-      case Attribute::SyringePayload:
-      case Attribute::SyringeInjectionSite:
+      //case Attribute::SyringePayload:
+      //case Attribute::SyringeInjectionSite:
       case Attribute::Cold:
       case Attribute::NoRecurse:
       case Attribute::InlineHint:

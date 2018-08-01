@@ -753,7 +753,7 @@ bool tools::addSyringeRuntime(const ToolChain& TC, const ArgList &Args, ArgStrin
 }
 
 void tools::linkSyringeRuntimeDeps(const ToolChain &TC, ArgStringList &CmdArgs) {
-    llvm::errs() << "Adding Syringe Link Dependencies\n";
+    //llvm::errs() << "Adding Syringe Link Dependencies\n";
 
   CmdArgs.push_back("--no-as-needed");
   CmdArgs.push_back("-lpthread");
