@@ -1,11 +1,9 @@
 #include "syringe.hpp"
-#include "util.hpp"
 #include <iostream>
 
+extern int hello_count;
 [[clang::syringe_injection_site]] void hello() {
   std::cout << "Hello World!" << std::endl;
+  hello_count++;
 }
 
-[[clang::syringe_payload("_Z5hellov")]] void injected() {
-  std::cout << "I've Hijacked the World!" << std::endl;
-}
