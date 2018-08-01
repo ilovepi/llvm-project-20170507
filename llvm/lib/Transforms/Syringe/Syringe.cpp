@@ -45,13 +45,12 @@ struct SyringeInitData {
 
 void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &initData) {
 
-    // create a ctor
-    Function *Ctor = Function::Create(
-        FunctionType::get(Type::getVoidTy(M.getContext()), false),
-        GlobalValue::InternalLinkage, kSyringeModuleCtorName, &M);
-BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
-    IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
-
+  // create a ctor
+  Function *Ctor = Function::Create(
+      FunctionType::get(Type::getVoidTy(M.getContext()), false),
+      GlobalValue::InternalLinkage, kSyringeModuleCtorName, &M);
+  BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
+  IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
 
   for (auto metaData : initData) {
     auto target = metaData.target;
@@ -84,14 +83,12 @@ BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
     regFunc->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
     // give it a body and have it call the registration function w/ our target
     // arguments
-        IRB.CreateCall(constF, ParamArgsRef);
-
+    IRB.CreateCall(constF, ParamArgsRef);
   }
-    // Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-    // Ctor->setComdat(M.getOrInsertComdat(kSyringeModuleCtorName));
-    appendToGlobalCtors(M, Ctor, 65535);
-    // errs() << M;
-
+  // Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
+  // Ctor->setComdat(M.getOrInsertComdat(kSyringeModuleCtorName));
+  appendToGlobalCtors(M, Ctor, 65535);
+  // errs() << M;
 }
 
 static bool doInjectionForModule(Module &M) {
@@ -151,7 +148,8 @@ std::tuple<Twine, Twine, Twine> createNamesFromSyringeAttr(Twine name) {
   auto target = name.str();
   auto stub = createStubNameFromBase(target);
   auto impl_ptr = createImplPtrNameFromBase(target);
-  return std::tuple<std::string, std::string, std::string>(target, stub, impl_ptr);
+  return std::tuple<std::string, std::string, std::string>(target, stub,
+                                                           impl_ptr);
 }
 
 /// create funciton stub for behavior injection
@@ -163,7 +161,6 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
   for (Function &F : M) {
     changedPayload = true;
-    // if (F.hasFnAttribute(Attribute::SyringePayload)) {
     if (F.hasFnAttribute("SyringePayload")) {
       // errs() << "Found Syringe Payload\n";
 
@@ -175,23 +172,11 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
         auto alias =
             GlobalAlias::create(createStubNameFromBase(targetName), &F);
         alias->setVisibility(GlobalValue::VisibilityTypes::DefaultVisibility);
-
-        //(auto baseName, auto stubName, auto impl_ptr) =
-        // createNamesFromSyringeAttr(targetName);
-        // orig function has target name
-
-        // impl function has target name + impl suffix
-
-        // impl ptr has target name + ptr suffix
-
-        // add to the init vector
-        // initData.emplace_back()
       }
     }
   }
 
   for (Function &F : M) {
-    // if (F.hasFnAttribute(Attribute::SyringeInjectionSite)) {
     if (F.hasFnAttribute("SyringeInjectionSite")) {
       // errs() << "Found Syringe Injection Site\n";
       changedPayload = true;
@@ -199,7 +184,6 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
       // clone function
       auto *cloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
-      // auto aliasName = F.getName().str() + "$detour_impl";
       auto aliasName = createAliasNameFromBase(F.getName());
       errs() << aliasName << "\n";
 
@@ -207,7 +191,7 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
       auto *internalAlias = M.getNamedAlias(aliasName);
 
       if (internalAlias == nullptr) {
-      errs() << "Made it here !!!\n";
+        errs() << "Made it here !!!\n";
         auto aliasDecl = orc::cloneFunctionDecl(M, F, nullptr);
         aliasDecl->setName(aliasName);
         aliasDecl->removeFnAttr("SyringeInjectionSite");
@@ -218,8 +202,6 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
       }
 
       cloneDecl->setName(createStubNameFromBase(F.getName()));
-      // cloneDecl->setName(F.getName() + "$syringe_impl");
-      // cloneDecl->setName("_Z18hello_syringe_implv");
       orc::moveFunctionBody(F, VMap, nullptr, cloneDecl);
       cloneDecl->removeFnAttr("SyringeInjectionSite");
       auto stub = cloneDecl;
@@ -239,7 +221,7 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
   // if we've made a modification, add a global ctor entry for the function
   if (changedPayload) {
-      //errs() << "Made it to initialization !!!\n";
+    // errs() << "Made it to initialization !!!\n";
     createCtorInit(M, initData);
   }
 
