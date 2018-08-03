@@ -4,6 +4,7 @@
 #include "syringe/injection_data.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <type_traits>
 #include <vector>
 
@@ -50,19 +51,28 @@ template <typename T> bool toggleImpl(T OrigFunc) {
   return true;
 }
 
-template <typename T, typename R> bool toggleVirtualImpl(T OrigFunc, R instance) {
-//fptr_t target;
-  //target = convertMemberPtr(OrigFunc);
+/// Toggle virutal function implementation
+/// Currently only works for Itanium ABI
+template <typename T, typename R>
+bool toggleVirtualImpl(T OrigFunc, R Instance) {
+  // use char * to represent vtbl address for easy indexing
+  typedef char *vtblptr_t;
 
+  // convert the OrigFunc to a member function pointer type
+  mPtrTy *MemberFnPtr = (mPtrTy *)&OrigFunc;
 
-  //auto ptrd = (ptrdiff_t)target;
-  mPtrTy* myPtr = (mPtrTy*)&OrigFunc;
-  char** crazy = (char**)instance;
-  auto vtbl = *crazy;
+  // get the vtbl for the passed in instance
+  vtblptr_t *PtrToVtblPtr = (vtblptr_t *)Instance;
+  // on itanium the vtable pointer is the at the instance's address
+  auto VtblPtr = *PtrToVtblPtr;
 
-  printf("%p\n", vtbl);
+  // TODO: do we need the adjustment?
+  // calculate the offset of into the vtable for the target function
+  auto FnOffset = MemberFnPtr->ptr + MemberFnPtr->adj - 1;
+  auto TargetAddr =
+      static_cast<void **>(static_cast<void *>(VtblPtr + FnOffset));
 
-  auto Ptr = findImplPointer(*(void**)(vtbl + myPtr->ptr + myPtr->adj -1));
+  auto Ptr = findImplPointer(*TargetAddr);
   if (!Ptr) {
     return false;
   }

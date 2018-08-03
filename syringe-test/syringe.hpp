@@ -7,8 +7,8 @@
 
 class SyringeBase {
 public:
-  SyringeBase() = default;
-  virtual ~SyringeBase() = default;
+  SyringeBase();
+  virtual ~SyringeBase()= default;
 
   int counter;
   int other_counter;
@@ -19,10 +19,10 @@ public:
 
 class SyringeDerived : public SyringeBase {
 public:
-  SyringeDerived() = default;
+  SyringeDerived();
   virtual ~SyringeDerived() = default;
   void increment();
-  int getCounter() ;
+  int getCounter();
 };
 
 #endif
