@@ -12,7 +12,7 @@ public:
 
   int counter;
   int other_counter;
-  [[clang::syringe_injection_site]] void increment();
+  [[clang::syringe_injection_site]] void virtual increment();
   [[clang::syringe_injection_site]] int getCounter();
   void foo();
 };

@@ -24,24 +24,45 @@ InjectionData *findImplPointerImpl(fptr_t target);
 
 template <typename T> InjectionData *findImplPointer(T OrigFunc) {
   fptr_t target;
-    target = convertMemberPtr(OrigFunc);
+  target = convertMemberPtr(OrigFunc);
 
-    return findImplPointerImpl(target);
+  return findImplPointerImpl(target);
 }
 
 template <typename T, typename R>
 void registerInjection(T OrigFunc, T StubImpl, T DetourFunc, R ImplPtr) {
-  auto It = findImplPointer(OrigFunc);
-  if (It == nullptr) {
-    GlobalSyringeData.emplace_back(OrigFunc, StubImpl, DetourFunc, ImplPtr);
-  }
-  else{
-    std::cout << "Something horrible has happened durring registration!\n" << std::endl;
-  }
+  assert(findImplPointer(OrigFunc) == nullptr &&
+         "Cannot register two payloads for the same injection site!");
+  GlobalSyringeData.emplace_back(OrigFunc, StubImpl, DetourFunc, ImplPtr);
 }
 
 template <typename T> bool toggleImpl(T OrigFunc) {
   auto Ptr = findImplPointer(OrigFunc);
+  if (!Ptr) {
+    return false;
+  }
+
+  if (*(Ptr->ImplPtr) == Ptr->StubImpl) {
+    *(Ptr->ImplPtr) = Ptr->DetourFunc;
+  } else {
+    *(Ptr->ImplPtr) = Ptr->StubImpl;
+  }
+  return true;
+}
+
+template <typename T, typename R> bool toggleVirtualImpl(T OrigFunc, R instance) {
+//fptr_t target;
+  //target = convertMemberPtr(OrigFunc);
+
+
+  //auto ptrd = (ptrdiff_t)target;
+  mPtrTy* myPtr = (mPtrTy*)&OrigFunc;
+  char** crazy = (char**)instance;
+  auto vtbl = *crazy;
+
+  printf("%p\n", vtbl);
+
+  auto Ptr = findImplPointer(*(void**)(vtbl + myPtr->ptr + myPtr->adj -1));
   if (!Ptr) {
     return false;
   }
@@ -80,7 +101,6 @@ template <typename T> fptr_t lookupMemberFunctionAddr(T FPtr) {
 }
 
 void printSyringeData();
-
 
 } // end namespace __syringe
 
