@@ -21,6 +21,7 @@ class SyringeDerived : public SyringeBase {
 public:
   SyringeDerived() = default;
   virtual ~SyringeDerived() = default;
+  void increment();
   int getCounter() ;
 };
 
