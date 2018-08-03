@@ -10,15 +10,15 @@ namespace __syringe {
 std::vector<InjectionData> GlobalSyringeData;
 
 InjectionData *findImplPointerImpl(fptr_t target) {
-  auto tmp = std::find_if(GlobalSyringeData.begin(), GlobalSyringeData.end(),
+  auto It = std::find_if(GlobalSyringeData.begin(), GlobalSyringeData.end(),
                           [target](InjectionData It) -> bool {
                             return (void *)It.OrigFunc == (void *)target;
                           });
 
-  if (tmp == GlobalSyringeData.end()) {
+  if (It == GlobalSyringeData.end()) {
     return nullptr;
   } else {
-    return &*tmp;
+    return &*It;
   }
 }
 

@@ -17,15 +17,15 @@ int main()
 
     hello();
     assert( hello_count == 1 && "Hello Count incorrect");
-    toggleImpl(hello);
+    assert(toggleImpl(hello) && "hello() could not be toggled!");
     hello();
     assert( injected_count == 1 && "Hello Count incorrect");
-    toggleImpl(hello);
+    assert(toggleImpl(hello) && "hello() could not be toggled!");
     hello();
     assert( hello_count == 2 && "Hello Count incorrect");
 
     //std::cout <<"hello addr:" << (void*)hello <<std::endl;
-    //printSyringeData();
+    printSyringeData();
 
     SyringeBase b;
     std::cout << b.counter <<std::endl;
@@ -36,7 +36,9 @@ int main()
     assert(b.counter == 1);
     assert(b.getCounter() == b.counter);
 
-    toggleImpl(&SyringeBase::increment);
+    mPtrTy* myP = (mPtrTy*)convertMemberPtr(&SyringeBase::increment);
+
+    assert(toggleVirtualImpl(myP, &b) && "SyringeBase::increment() could not be toggled!");
     b.increment();
     b.increment();
 
