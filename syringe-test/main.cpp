@@ -24,8 +24,8 @@ int main()
     hello();
     assert( hello_count == 2 && "Hello Count incorrect");
 
-    std::cout <<"hello addr:" << (void*)hello <<std::endl;
-    printSyringeData();
+    //std::cout <<"hello addr:" << (void*)hello <<std::endl;
+    //printSyringeData();
 
     SyringeBase b;
     std::cout << b.counter <<std::endl;

@@ -12,9 +12,9 @@ extern int hello_count;
   return counter;
 }
 
-[[clang::syringe_payload("_ZN11SyringeBase9incrementEv")]] int badGetCounter() {
-  return 5;
-}
+//[[clang::syringe_payload("_ZN11SyringeBase9incrementEv")]] int badGetCounter() {
+  //return 5;
+//}
 
 [[clang::syringe_payload("_ZN11SyringeBase10getCounterEv")]] int
 SyringeDerived::getCounter() {
@@ -24,5 +24,10 @@ SyringeDerived::getCounter() {
 [[clang::syringe_injection_site]] void SyringeBase::increment() {
   ++counter;
 };
+
+[[clang::syringe_payload("_ZN11SyringeBase9incrementEv")]] void
+SyringeDerived::increment() {
+  ++other_counter;
+}
 
 void SyringeBase::foo() {}
