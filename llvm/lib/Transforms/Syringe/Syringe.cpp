@@ -33,13 +33,13 @@
 
 using namespace llvm;
 
-namespace {
-
 static const char *const SyringeModuleCtorName = "syringe.module_ctor";
 static const char *const SyringeInitName = "__syringe_register";
 static const char *const SyringeStubImplSuffix = "$syringe_impl";
 static const char *const SyringeDetourImplSuffix = "$detour_impl";
 static const char *const SyringeImplPtrSuffix = "$syringe_impl_ptr";
+
+namespace {
 
 struct SyringeInitData {
   Function *Target;
@@ -47,6 +47,8 @@ struct SyringeInitData {
   Function *Detour;
   GlobalValue *SyringePtr;
 };
+
+} // namespace
 
 // create a single ctor function for the module, whose body should consist of a
 // call to each of the registered syringe functions.
@@ -61,12 +63,12 @@ struct SyringeInitData {
 //      ....
 // }
 //
-void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &InitData) {
+static void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &InitData) {
 
   // create a ctor
   Function *Ctor = Function::Create(
       FunctionType::get(Type::getVoidTy(M.getContext()), false),
-      GlobalValue::InternalLinkage, SyringeModuleCtorName, &M);
+      GlobalValue::InternalLinkage, SyringeModuleCtorName + M.getName() , &M);
   BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
   IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
 
@@ -110,19 +112,19 @@ void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &InitData) {
   // errs() << M;
 }
 
-std::string createStubNameFromBase(StringRef BaseName) {
+static std::string createStubNameFromBase(StringRef BaseName) {
   return (BaseName + SyringeStubImplSuffix).str();
 }
 
-std::string createImplPtrNameFromBase(StringRef BaseName) {
+static std::string createImplPtrNameFromBase(StringRef BaseName) {
   return (BaseName + SyringeImplPtrSuffix).str();
 }
 
-std::string createAliasNameFromBase(StringRef BaseName) {
+static std::string createAliasNameFromBase(StringRef BaseName) {
   return (BaseName + SyringeDetourImplSuffix).str();
 }
 
-std::tuple<std::string, std::string, std::string>
+static std::tuple<std::string, std::string, std::string>
 createNamesFromSyringeAttr(StringRef AttrName) {
   auto TargetName = AttrName;
   auto StubName = createStubNameFromBase(TargetName);
@@ -131,7 +133,6 @@ createNamesFromSyringeAttr(StringRef AttrName) {
                                                            ImplPtrName);
 }
 
-} // namespace
 
 // check if the module needs the Syringe Pass
 static bool doInjectionForModule(Module &M) {

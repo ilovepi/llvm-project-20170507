@@ -5,4 +5,23 @@
 
 [[clang::syringe_payload("_Z5hellov")]] void injected();
 
+class SyringeBase {
+public:
+  SyringeBase() = default;
+  virtual ~SyringeBase() = default;
+
+  int counter;
+  int other_counter;
+  [[clang::syringe_injection_site]] void increment();
+  [[clang::syringe_injection_site]] int getCounter();
+  void foo();
+};
+
+class SyringeDerived : public SyringeBase {
+public:
+  SyringeDerived() = default;
+  virtual ~SyringeDerived() = default;
+  int getCounter() ;
+};
+
 #endif
