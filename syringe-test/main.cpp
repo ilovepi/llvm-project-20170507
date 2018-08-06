@@ -1,4 +1,5 @@
 #include "syringe.hpp"
+#include "template.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -8,6 +9,10 @@ using namespace __syringe;
 
 int injected_count = 0;
 int hello_count = 0;
+
+
+template int bad_foo<int>(int a, int b);
+template class BadAdder<int>;
 
 int main() {
   // ensure that Syringe metadata is initialized
@@ -56,6 +61,31 @@ int main() {
   assert(b.other_counter == 2);
   assert(b.getCounter() != b.other_counter);
   assert(b.getCounter() == b.counter);
+
+
+  // test template function
+  assert(foo(1,1) == 2 && "Problem with original template funciton foo!");
+  toggleImpl(foo<int>);
+  assert(foo(1,1) == 0 && "injection failed for function foo!");
+
+
+  Adder<int> a(1);
+  assert(a.data == 1);
+  assert(a.add(1) == 2 && "Problem with original class template Adder::add()!");
+
+  // get the member pointer to the target baseclass function
+  //mPtrTy *myClassPtr = (mPtrTy *)convertMemberPtr(&Adder<int>::add);
+
+  // switch its implementation
+  //assert(toggleVirtualImpl(myClassPtr, &b) &&
+         //"SyringeBase::increment() could not be toggled!");
+assert(toggleImpl(&Adder<int>::add) &&
+         "SyringeBase::increment() could not be toggled!");
+
+
+  assert(a.add(1) == 0 && "Injection failed for class template Adder::add()!");
+
+
 
   std::cout << "\n\033[1;32mAll checks have passed!\033[0m" <<std::endl;
   return 0;
