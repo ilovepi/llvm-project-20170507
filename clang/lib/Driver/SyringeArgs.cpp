@@ -1,4 +1,4 @@
-//===--- SyringeArgs.cpp - Arguments for Syringe --------------------------------===//
+//===--- SyringeArgs.cpp - Arguments for Syringe --------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -23,8 +23,7 @@ constexpr char SyringeInstrumentOption[] = "-fsyringe";
 SyringeArgs::SyringeArgs(const ToolChain &TC, const ArgList &Args) {
   const Driver &D = TC.getDriver();
   const llvm::Triple &Triple = TC.getTriple();
-  if (Args.hasFlag(options::OPT_fsyringe,
-                   options::OPT_fnosyringe, false)) {
+  if (Args.hasFlag(options::OPT_fsyringe, options::OPT_fnosyringe, false)) {
     if (Triple.getOS() == llvm::Triple::Linux) {
       switch (Triple.getArch()) {
       case llvm::Triple::x86_64:
@@ -62,7 +61,7 @@ SyringeArgs::SyringeArgs(const ToolChain &TC, const ArgList &Args) {
 }
 
 void SyringeArgs::addArgs(const ToolChain &TC, const ArgList &Args,
-                       ArgStringList &CmdArgs, types::ID InputType) const {
+                          ArgStringList &CmdArgs, types::ID InputType) const {
   if (!SyringeInject)
     return;
 
