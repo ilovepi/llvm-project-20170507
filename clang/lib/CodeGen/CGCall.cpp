@@ -1845,13 +1845,6 @@ void CodeGenModule::ConstructAttributeList(
       FuncAttrs.addAttribute(llvm::Attribute::NoDuplicate);
     if (TargetDecl->hasAttr<ConvergentAttr>())
       FuncAttrs.addAttribute(llvm::Attribute::Convergent);
-    //if (TargetDecl->hasAttr<SyringeInjectionSite>()){
-      //FuncAttrs.addAttribute(llvm::Attribute::SyringeInjectionSite);
-    //}
-    //if (TargetDecl->hasAttr<SyringePayload>()){
-      //FuncAttrs.addAttribute(llvm::Attribute::SyringePayload);
-    //}
-
     if (const FunctionDecl *Fn = dyn_cast<FunctionDecl>(TargetDecl)) {
       AddAttributesFromFunctionProtoType(
           getContext(), FuncAttrs, Fn->getType()->getAs<FunctionProtoType>());

@@ -314,8 +314,7 @@ static void addEfficiencySanitizerPass(const PassManagerBuilder &Builder,
   PM.add(createEfficiencySanitizerPass(Opts));
 }
 
-static void addSyringePass(const PassManagerBuilder &Builder,
-                                       legacy::PassManagerBase &PM) {
+static void addSyringePass(legacy::PassManagerBase &PM) {
   PM.add(createSyringe());
 }
 
@@ -663,7 +662,7 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
   }
 
   if (LangOpts.SyringeInject) {
-    MPM.add(createSyringe());
+    addSyringePass(MPM);
   }
 
   if (CodeGenOpts.hasProfileIRInstr()) {

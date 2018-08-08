@@ -737,8 +737,8 @@ bool tools::addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   return !StaticRuntimes.empty() || !NonWholeStaticRuntimes.empty();
 }
 
-bool tools::addSyringeRuntime(const ToolChain& TC, const ArgList &Args, ArgStringList &CmdArgs) {
-    //llvm::errs() << "Adding Syringe Runtime Libraries\n";
+bool tools::addSyringeRuntime(const ToolChain &TC, const ArgList &Args,
+                              ArgStringList &CmdArgs) {
   if (Args.hasArg(options::OPT_shared))
     return false;
 
@@ -752,9 +752,8 @@ bool tools::addSyringeRuntime(const ToolChain& TC, const ArgList &Args, ArgStrin
   return false;
 }
 
-void tools::linkSyringeRuntimeDeps(const ToolChain &TC, ArgStringList &CmdArgs) {
-    //llvm::errs() << "Adding Syringe Link Dependencies\n";
-
+void tools::linkSyringeRuntimeDeps(const ToolChain &TC,
+                                   ArgStringList &CmdArgs) {
   CmdArgs.push_back("--no-as-needed");
   CmdArgs.push_back("-lpthread");
   if (TC.getTriple().getOS() != llvm::Triple::OpenBSD)
@@ -766,8 +765,6 @@ void tools::linkSyringeRuntimeDeps(const ToolChain &TC, ArgStringList &CmdArgs) 
       TC.getTriple().getOS() != llvm::Triple::OpenBSD)
     CmdArgs.push_back("-ldl");
 }
-
-
 
 bool tools::addXRayRuntime(const ToolChain& TC, const ArgList &Args, ArgStringList &CmdArgs) {
   if (Args.hasArg(options::OPT_shared))

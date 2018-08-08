@@ -516,8 +516,9 @@ private:
                                StringRef Sanitizer,
                                bool shared = true) const;
 
-  void AddSyringeRTLibArgs(const llvm::opt::ArgList &Args,
-                        llvm::opt::ArgStringList &CmdArgs, bool shared = true) const ;
+  void addSyringeRTLibArgs(const llvm::opt::ArgList &Args,
+                           llvm::opt::ArgStringList &CmdArgs,
+                           bool shared = true) const;
 };
 
 } // end namespace toolchains

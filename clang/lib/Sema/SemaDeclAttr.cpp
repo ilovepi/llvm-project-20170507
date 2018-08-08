@@ -411,13 +411,12 @@ static void handleSimpleAttributeWithExclusions(Sema &S, Decl *D,
                                                                           AL);
 }
 
+/// Applies the Syringe Payload Attribute sets the payload target string
 static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   StringRef Model;
   SourceLocation LiteralLoc;
-  // Check that it is a string.
   if (!S.checkStringLiteralArgumentAttr(AL, 0, Model, &LiteralLoc))
     return;
-  // llvm::errs() << Model << "\n";
 
   D->addAttr(::new (S.Context) SyringePayloadAttr(
       AL.getRange(), S.Context, Model, AL.getAttributeSpellingListIndex()));

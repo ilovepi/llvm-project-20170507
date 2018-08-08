@@ -3398,9 +3398,9 @@ def SyringeDocs : Documentation {
   let Category = DocCatFunction;
   let Heading = "syringe_injection_site (clang::syringe_injection_site), syringe_injection_payload (clang::syringe_injection_payload)";
   let Content = [{
-``__attribute__((syringe_injection_site))`` or ``[[clang::syringe_injection_site]]`` is used to mark member functions (in C++), methods (in Objective C), and free functions (in C, C++, and Objective C) to have new behaviors injected with Syringe. This will allow the Syringe runtime to modify the function's behavior dynamically as the program runs.
+``__attribute__((syringe_injection_site))`` or ``[[clang::syringe_injection_site]]`` is used to mark member functions (in C++), methods (in Objective C), and free functions (in C, C++, and Objective C) to have new behaviors injected by Syringe. This will allow the Syringe runtime to modify the function's behavior dynamically as the program runs.
 
-``__attribute__((syringe_injection_payload(N)))`` or ``[[clang::syringe_injection_payload(N)]]`` is used to demark the payload function that Syringe will inject.  TODO: describe options.
+``__attribute__((syringe_injection_payload(TARGET_FUNCTION)))`` or ``[[clang::syringe_injection_payload(TARGET_FUNCTION)]]`` is used to demark the payload function that Syringe will inject into invocations of TARGET_FUNCTION.
 
 If a function has neither of these attributes, they are ignored by the Syringe passes and runtime.
   }];
