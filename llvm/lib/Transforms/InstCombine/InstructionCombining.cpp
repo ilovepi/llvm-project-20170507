@@ -1424,7 +1424,7 @@ Instruction *InstCombiner::foldShuffledBinop(BinaryOperator &Inst) {
       bool ConstOp1 = isa<Constant>(Inst.getOperand(1));
       if (Inst.isIntDivRem() || (Inst.isShift() && ConstOp1))
         NewC = getSafeVectorConstantForBinop(Inst.getOpcode(), NewC, ConstOp1);
-      
+
       // Op(shuffle(V1, Mask), C) -> shuffle(Op(V1, NewC), Mask)
       // Op(C, shuffle(V1, Mask)) -> shuffle(Op(NewC, V1), Mask)
       Value *NewLHS = isa<Constant>(LHS) ? NewC : V1;
@@ -2144,7 +2144,7 @@ Instruction *InstCombiner::visitAllocSite(Instruction &MI) {
 
   // If we are removing an alloca with a dbg.declare, insert dbg.value calls
   // before each store.
-  TinyPtrVector<DbgInfoIntrinsic *> DIIs;
+  TinyPtrVector<DbgVariableIntrinsic *> DIIs;
   std::unique_ptr<DIBuilder> DIB;
   if (isa<AllocaInst>(MI)) {
     DIIs = FindDbgAddrUses(&MI);
@@ -2934,7 +2934,7 @@ static bool TryToSinkInstruction(Instruction *I, BasicBlock *DestBlock) {
 
   // Also sink all related debug uses from the source basic block. Otherwise we
   // get debug use before the def.
-  SmallVector<DbgInfoIntrinsic *, 1> DbgUsers;
+  SmallVector<DbgVariableIntrinsic *, 1> DbgUsers;
   findDbgUsers(DbgUsers, I);
   for (auto *DII : DbgUsers) {
     if (DII->getParent() == SrcBlock) {

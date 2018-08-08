@@ -25,6 +25,7 @@
 #include "llvm/CodeGen/FaultMaps.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/DebugInfo/Symbolize/Symbolize.h"
+#include "llvm/Demangle/Demangle.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
@@ -41,6 +42,7 @@
 #include "llvm/Object/COFFImportFile.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/MachO.h"
+#include "llvm/Object/MachOUniversal.h"
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Object/Wasm.h"
 #include "llvm/Support/Casting.h"
@@ -89,6 +91,13 @@ llvm::DisassembleAll("disassemble-all",
 static cl::alias
 DisassembleAlld("D", cl::desc("Alias for --disassemble-all"),
              cl::aliasopt(DisassembleAll));
+
+cl::opt<std::string> llvm::Demangle("demangle",
+                                    cl::desc("Demangle symbols names"),
+                                    cl::ValueOptional, cl::init("none"));
+
+static cl::alias DemangleShort("C", cl::desc("Alias for --demangle"),
+                               cl::aliasopt(Demangle));
 
 static cl::list<std::string>
 DisassembleFunctions("df",
@@ -328,6 +337,11 @@ LLVM_ATTRIBUTE_NORETURN void llvm::error(Twine Message) {
   errs() << ToolName << ": " << Message << ".\n";
   errs().flush();
   exit(1);
+}
+
+void llvm::warn(StringRef Message) {
+  errs() << ToolName << ": warning: " << Message << ".\n";
+  errs().flush();
 }
 
 LLVM_ATTRIBUTE_NORETURN void llvm::report_error(StringRef File,
@@ -1511,7 +1525,25 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
         }
       }
 
-      outs() << '\n' << std::get<1>(Symbols[si]) << ":\n";
+      auto PrintSymbol = [](StringRef Name) {
+        outs() << '\n' << Name << ":\n";
+      };
+      StringRef SymbolName = std::get<1>(Symbols[si]);
+      if (Demangle.getValue() == "" || Demangle.getValue() == "itanium") {
+        char *DemangledSymbol = nullptr;
+        size_t Size = 0;
+        int Status;
+        DemangledSymbol =
+            itaniumDemangle(SymbolName.data(), DemangledSymbol, &Size, &Status);
+        if (Status == 0)
+          PrintSymbol(StringRef(DemangledSymbol));
+        else
+          PrintSymbol(SymbolName);
+
+        if (Size != 0)
+          free(DemangledSymbol);
+      } else
+        PrintSymbol(SymbolName);
 
       // Don't print raw contents of a virtual section. A virtual section
       // doesn't have any contents in the file.
@@ -1620,7 +1652,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
             }
             Byte = Bytes.slice(Index)[0];
             outs() << format(" %02x", Byte);
-            AsciiData[NumBytes] = isprint(Byte) ? Byte : '.';
+            AsciiData[NumBytes] = isPrint(Byte) ? Byte : '.';
 
             uint8_t IndentOffset = 0;
             NumBytes++;
@@ -1815,7 +1847,6 @@ void llvm::PrintDynamicRelocations(const ObjectFile *Obj) {
 void llvm::PrintSectionHeaders(const ObjectFile *Obj) {
   outs() << "Sections:\n"
             "Idx Name          Size      Address          Type\n";
-  unsigned i = 0;
   for (const SectionRef &Section : ToolSectionFilter(*Obj)) {
     StringRef Name;
     error(Section.getName(Name));
@@ -1826,9 +1857,9 @@ void llvm::PrintSectionHeaders(const ObjectFile *Obj) {
     bool BSS = Section.isBSS();
     std::string Type = (std::string(Text ? "TEXT " : "") +
                         (Data ? "DATA " : "") + (BSS ? "BSS" : ""));
-    outs() << format("%3d %-13s %08" PRIx64 " %016" PRIx64 " %s\n", i,
-                     Name.str().c_str(), Size, Address, Type.c_str());
-    ++i;
+    outs() << format("%3d %-13s %08" PRIx64 " %016" PRIx64 " %s\n",
+                     (unsigned)Section.getIndex(), Name.str().c_str(), Size,
+                     Address, Type.c_str());
   }
 }
 
@@ -1869,7 +1900,7 @@ void llvm::PrintSectionContents(const ObjectFile *Obj) {
       // Print ascii.
       outs() << "  ";
       for (std::size_t i = 0; i < 16 && addr + i < end; ++i) {
-        if (std::isprint(static_cast<unsigned char>(Contents[addr + i]) & 0xFF))
+        if (isPrint(static_cast<unsigned char>(Contents[addr + i]) & 0xFF))
           outs() << Contents[addr + i];
         else
           outs() << ".";
@@ -2123,8 +2154,10 @@ static void printFaultMaps(const ObjectFile *Obj) {
 }
 
 static void printPrivateFileHeaders(const ObjectFile *o, bool onlyFirst) {
-  if (o->isELF())
-    return printELFFileHeader(o);
+  if (o->isELF()) {
+    printELFFileHeader(o);
+    return printELFDynamicSection(o);
+  }
   if (o->isCOFF())
     return printCOFFFileHeader(o);
   if (o->isWasm())
@@ -2331,6 +2364,8 @@ static void DumpInput(StringRef file) {
     DumpArchive(a);
   else if (ObjectFile *o = dyn_cast<ObjectFile>(&Binary))
     DumpObject(o);
+  else if (MachOUniversalBinary *UB = dyn_cast<MachOUniversalBinary>(&Binary))
+    ParseInputMachO(UB);
   else
     report_error(file, object_error::invalid_file_type);
 }
@@ -2360,6 +2395,11 @@ int main(int argc, char **argv) {
 
   if (DisassembleAll || PrintSource || PrintLines)
     Disassemble = true;
+
+  if (Demangle.getValue() != "none" && Demangle.getValue() != "" &&
+      Demangle.getValue() != "itanium")
+    warn("Unsupported demangling style");
+
   if (!Disassemble
       && !Relocations
       && !DynamicRelocations

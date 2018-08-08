@@ -246,7 +246,7 @@ namespace {
 
       getMutableDeclSpec().getAttributes().clearListOnly();
       for (ParsedAttr *AL : savedAttrs)
-        getMutableDeclSpec().getAttributes().addAtStart(AL);
+        getMutableDeclSpec().getAttributes().addAtEnd(AL);
     }
   };
 } // end anonymous namespace
@@ -255,7 +255,7 @@ static void moveAttrFromListToList(ParsedAttr &attr,
                                    ParsedAttributesView &fromList,
                                    ParsedAttributesView &toList) {
   fromList.remove(&attr);
-  toList.addAtStart(&attr);
+  toList.addAtEnd(&attr);
 }
 
 /// The location of a type attribute.
@@ -2851,7 +2851,7 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
     case DeclaratorContext::ObjCParameterContext:
     case DeclaratorContext::ObjCResultContext:
     case DeclaratorContext::PrototypeContext:
-      Error = 0;  
+      Error = 0;
       break;
     case DeclaratorContext::LambdaExprParameterContext:
       // In C++14, generic lambdas allow 'auto' in their parameters.
@@ -2859,7 +2859,7 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
           !Auto || Auto->getKeyword() != AutoTypeKeyword::Auto)
         Error = 16;
       else {
-        // If auto is mentioned in a lambda parameter context, convert it to a 
+        // If auto is mentioned in a lambda parameter context, convert it to a
         // template parameter type.
         sema::LambdaScopeInfo *LSI = SemaRef.getCurLambda();
         assert(LSI && "No LambdaScopeInfo on the stack!");
@@ -2877,7 +2877,7 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
                 TemplateParameterDepth, AutoParameterPosition,
                 /*Identifier*/nullptr, false, IsParameterPack);
         LSI->AutoTemplateParams.push_back(CorrespondingTemplateParam);
-        // Replace the 'auto' in the function parameter with this invented 
+        // Replace the 'auto' in the function parameter with this invented
         // template type parameter.
         // FIXME: Retain some type sugar to indicate that this was written
         // as 'auto'.
@@ -4128,7 +4128,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
               SourceRange(pointerLoc), nullptr, SourceLocation(), nullptr, 0,
               syntax);
 
-      attrs.addAtStart(nullabilityAttr);
+      attrs.addAtEnd(nullabilityAttr);
 
       if (inferNullabilityCS) {
         state.getDeclarator().getMutableDeclSpec().getObjCQualifiers()
@@ -4440,7 +4440,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
             S.Diag(D.getIdentifierLoc(), diag::err_opencl_invalid_return)
                 << T << 0 /*pointer hint*/;
             D.setInvalidType(true);
-          } 
+          }
         } else if (!S.getLangOpts().HalfArgsAndReturns) {
           S.Diag(D.getIdentifierLoc(),
             diag::err_parameters_retval_cannot_have_fp16_type) << 1;
@@ -5093,7 +5093,7 @@ static void transferARCOwnershipToDeclaratorChunk(TypeProcessingState &state,
       &S.Context.Idents.get("objc_ownership"), SourceLocation(),
       /*scope*/ nullptr, SourceLocation(),
       /*args*/ &Args, 1, ParsedAttr::AS_GNU);
-  chunk.getAttrs().addAtStart(attr);
+  chunk.getAttrs().addAtEnd(attr);
   // TODO: mark whether we did this inference?
 }
 
@@ -5233,6 +5233,8 @@ static ParsedAttr::Kind getAttrListKind(AttributedType::Kind kind) {
     return ParsedAttr::AT_ObjCKindOf;
   case AttributedType::attr_ns_returns_retained:
     return ParsedAttr::AT_NSReturnsRetained;
+  case AttributedType::attr_lifetimebound:
+    return ParsedAttr::AT_LifetimeBound;
   }
   llvm_unreachable("unexpected attribute kind!");
 }
@@ -5332,7 +5334,7 @@ namespace {
         TL.copy(OldTL.castAs<TemplateSpecializationTypeLoc>());
         assert(TL.getRAngleLoc() == OldTL.castAs<TemplateSpecializationTypeLoc>().getRAngleLoc());
       }
-        
+
     }
     void VisitTypeOfExprTypeLoc(TypeOfExprTypeLoc TL) {
       assert(DS.getTypeSpecType() == DeclSpec::TST_typeofExpr);
@@ -5627,11 +5629,11 @@ Sema::GetTypeSourceInfoForDeclarator(Declarator &D, QualType T,
   }
 
   for (unsigned i = 0, e = D.getNumTypeObjects(); i != e; ++i) {
-    
+
     if (DependentAddressSpaceTypeLoc DASTL =
         CurrTL.getAs<DependentAddressSpaceTypeLoc>()) {
       fillDependentAddressSpaceTypeLoc(DASTL, D.getTypeObject(i).getAttrs());
-      CurrTL = DASTL.getPointeeTypeLoc().getUnqualifiedLoc();  
+      CurrTL = DASTL.getPointeeTypeLoc().getUnqualifiedLoc();
     }
 
     // An AtomicTypeLoc might be produced by an atomic qualifier in this
@@ -5727,13 +5729,13 @@ ParsedType Sema::ActOnObjCInstanceType(SourceLocation Loc) {
 // Type Attribute Processing
 //===----------------------------------------------------------------------===//
 
-/// BuildAddressSpaceAttr - Builds a DependentAddressSpaceType if an expression 
-/// is uninstantiated. If instantiated it will apply the appropriate address space 
+/// BuildAddressSpaceAttr - Builds a DependentAddressSpaceType if an expression
+/// is uninstantiated. If instantiated it will apply the appropriate address space
 /// to the type. This function allows dependent template variables to be used in
-/// conjunction with the address_space attribute  
+/// conjunction with the address_space attribute
 QualType Sema::BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
                                      SourceLocation AttrLoc) {
-  if (!AddrSpace->isValueDependent()) { 
+  if (!AddrSpace->isValueDependent()) {
 
     llvm::APSInt addrSpace(32);
     if (!AddrSpace->isIntegerConstantExpr(addrSpace, Context)) {
@@ -5783,8 +5785,8 @@ QualType Sema::BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
   }
 
   // A check with similar intentions as checking if a type already has an
-  // address space except for on a dependent types, basically if the 
-  // current type is already a DependentAddressSpaceType then its already 
+  // address space except for on a dependent types, basically if the
+  // current type is already a DependentAddressSpaceType then its already
   // lined up to have another address space on it and we can't have
   // multiple address spaces on the one pointer indirection
   if (T->getAs<DependentAddressSpaceType>()) {
@@ -6116,7 +6118,7 @@ static bool handleObjCGCTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
     attr.setInvalid();
     return true;
   }
-  
+
   // Check the attribute arguments.
   if (!attr.isArgIdent(0)) {
     S.Diag(attr.getLoc(), diag::err_attribute_argument_type)
@@ -6327,7 +6329,7 @@ static bool handleMSPointerTypeQualifierAttr(TypeProcessingState &State,
         << "'__sptr'" << "'__uptr'";
       return true;
     }
-    
+
     Desugared = AT->getEquivalentType();
     AT = dyn_cast<AttributedType>(Desugared);
   }
@@ -6384,7 +6386,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
           << FixItHint::CreateRemoval(nullabilityLoc);
 
         break;
-      } 
+      }
 
       // Conflicting nullability.
       Diag(nullabilityLoc, diag::err_nullability_conflicting)
@@ -6430,7 +6432,7 @@ bool Sema::checkNullabilityTypeSpecifier(QualType &type,
       << DiagNullabilityKind(nullability, isContextSensitive) << type;
     return true;
   }
-  
+
   // For the context-sensitive keywords/Objective-C property
   // attributes, require that the type be a single-level pointer.
   if (isContextSensitive) {
@@ -6472,7 +6474,7 @@ bool Sema::checkObjCKindOfType(QualType &type, SourceLocation loc) {
 
   // Find out if it's an Objective-C object or object pointer type;
   const ObjCObjectPointerType *ptrType = type->getAs<ObjCObjectPointerType>();
-  const ObjCObjectType *objType = ptrType ? ptrType->getObjectType() 
+  const ObjCObjectType *objType = ptrType ? ptrType->getObjectType()
                                           : type->getAs<ObjCObjectType>();
 
   // If not, we can't apply __kindof.
@@ -6501,7 +6503,7 @@ bool Sema::checkObjCKindOfType(QualType &type, SourceLocation loc) {
   }
 
   // Build the attributed type to record where __kindof occurred.
-  type = Context.getAttributedType(AttributedType::attr_objc_kindof, 
+  type = Context.getAttributedType(AttributedType::attr_objc_kindof,
                                    type,
                                    equivType);
 
@@ -6601,7 +6603,7 @@ static bool distributeNullabilityTypeAttr(TypeProcessingState &state,
       }
 
       return false;
-      
+
     // Don't walk through these.
     case DeclaratorChunk::Reference:
     case DeclaratorChunk::Pipe:
@@ -6732,7 +6734,7 @@ static bool handleFunctionTypeAttr(TypeProcessingState &state, ParsedAttr &attr,
     if (S.CheckAttrTarget(attr) || S.CheckAttrNoArgs(attr))
       return true;
 
-    // If this is not a function type, warning will be asserted by subject 
+    // If this is not a function type, warning will be asserted by subject
     // check.
     if (!unwrapped.isFunctionType())
       return true;
@@ -7194,6 +7196,18 @@ static void deduceOpenCLImplicitAddrSpace(TypeProcessingState &State,
   T = State.getSema().Context.getAddrSpaceQualType(T, ImpAddr);
 }
 
+static void HandleLifetimeBoundAttr(QualType &CurType,
+                                    const ParsedAttr &Attr,
+                                    Sema &S, Declarator &D) {
+  if (D.isDeclarationOfFunction()) {
+    CurType = S.Context.getAttributedType(AttributedType::attr_lifetimebound,
+                                          CurType, CurType);
+  } else {
+    Attr.diagnoseAppertainsTo(S, nullptr);
+  }
+}
+
+
 static void processTypeAttrs(TypeProcessingState &state, QualType &type,
                              TypeAttrLocation TAL,
                              ParsedAttributesView &attrs) {
@@ -7297,6 +7311,13 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
     case ParsedAttr::AT_OpenCLAccess:
       HandleOpenCLAccessAttr(type, attr, state.getSema());
       attr.setUsedAsTypeAttr();
+      break;
+    case ParsedAttr::AT_LifetimeBound:
+      if (TAL == TAL_DeclChunk) {
+        HandleLifetimeBoundAttr(type, attr, state.getSema(),
+                                state.getDeclarator());
+        attr.setUsedAsTypeAttr();
+      }
       break;
 
     MS_TYPE_ATTRS_CASELIST:
@@ -7663,39 +7684,24 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
     return false;
   }
 
-  const TagType *Tag = T->getAs<TagType>();
-  const ObjCInterfaceType *IFace = T->getAs<ObjCInterfaceType>();
+  TagDecl *Tag = dyn_cast_or_null<TagDecl>(Def);
+  ObjCInterfaceDecl *IFace = dyn_cast_or_null<ObjCInterfaceDecl>(Def);
 
-  // If there's an unimported definition of this type in a module (for
-  // instance, because we forward declared it, then imported the definition),
-  // import that definition now.
-  //
-  // FIXME: What about other cases where an import extends a redeclaration
-  // chain for a declaration that can be accessed through a mechanism other
-  // than name lookup (eg, referenced in a template, or a variable whose type
-  // could be completed by the module)?
-  //
-  // FIXME: Should we map through to the base array element type before
-  // checking for a tag type?
+  // Give the external source a chance to provide a definition of the type.
+  // This is kept separate from completing the redeclaration chain so that
+  // external sources such as LLDB can avoid synthesizing a type definition
+  // unless it's actually needed.
   if (Tag || IFace) {
-    NamedDecl *D =
-        Tag ? static_cast<NamedDecl *>(Tag->getDecl()) : IFace->getDecl();
-
     // Avoid diagnosing invalid decls as incomplete.
-    if (D->isInvalidDecl())
+    if (Def->isInvalidDecl())
       return true;
 
     // Give the external AST source a chance to complete the type.
     if (auto *Source = Context.getExternalSource()) {
-      if (Tag) {
-        TagDecl *TagD = Tag->getDecl();
-        if (TagD->hasExternalLexicalStorage())
-          Source->CompleteType(TagD);
-      } else {
-        ObjCInterfaceDecl *IFaceD = IFace->getDecl();
-        if (IFaceD->hasExternalLexicalStorage())
-          Source->CompleteType(IFace->getDecl());
-      }
+      if (Tag && Tag->hasExternalLexicalStorage())
+          Source->CompleteType(Tag);
+      if (IFace && IFace->hasExternalLexicalStorage())
+          Source->CompleteType(IFace);
       // If the external source completed the type, go through the motions
       // again to ensure we're allowed to use the completed type.
       if (!T->isIncompleteType())
@@ -7706,32 +7712,31 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
   // If we have a class template specialization or a class member of a
   // class template specialization, or an array with known size of such,
   // try to instantiate it.
-  QualType MaybeTemplate = T;
-  while (const ConstantArrayType *Array
-           = Context.getAsConstantArrayType(MaybeTemplate))
-    MaybeTemplate = Array->getElementType();
-  if (const RecordType *Record = MaybeTemplate->getAs<RecordType>()) {
+  if (auto *RD = dyn_cast_or_null<CXXRecordDecl>(Tag)) {
     bool Instantiated = false;
     bool Diagnosed = false;
-    if (ClassTemplateSpecializationDecl *ClassTemplateSpec
-          = dyn_cast<ClassTemplateSpecializationDecl>(Record->getDecl())) {
+    if (RD->isDependentContext()) {
+      // Don't try to instantiate a dependent class (eg, a member template of
+      // an instantiated class template specialization).
+      // FIXME: Can this ever happen?
+    } else if (auto *ClassTemplateSpec =
+            dyn_cast<ClassTemplateSpecializationDecl>(RD)) {
       if (ClassTemplateSpec->getSpecializationKind() == TSK_Undeclared) {
         Diagnosed = InstantiateClassTemplateSpecialization(
             Loc, ClassTemplateSpec, TSK_ImplicitInstantiation,
             /*Complain=*/Diagnoser);
         Instantiated = true;
       }
-    } else if (CXXRecordDecl *Rec
-                 = dyn_cast<CXXRecordDecl>(Record->getDecl())) {
-      CXXRecordDecl *Pattern = Rec->getInstantiatedFromMemberClass();
-      if (!Rec->isBeingDefined() && Pattern) {
-        MemberSpecializationInfo *MSI = Rec->getMemberSpecializationInfo();
+    } else {
+      CXXRecordDecl *Pattern = RD->getInstantiatedFromMemberClass();
+      if (!RD->isBeingDefined() && Pattern) {
+        MemberSpecializationInfo *MSI = RD->getMemberSpecializationInfo();
         assert(MSI && "Missing member specialization information?");
         // This record was instantiated from a class within a template.
         if (MSI->getTemplateSpecializationKind() !=
             TSK_ExplicitSpecialization) {
-          Diagnosed = InstantiateClass(Loc, Rec, Pattern,
-                                       getTemplateInstantiationArgs(Rec),
+          Diagnosed = InstantiateClass(Loc, RD, Pattern,
+                                       getTemplateInstantiationArgs(RD),
                                        TSK_ImplicitInstantiation,
                                        /*Complain=*/Diagnoser);
           Instantiated = true;
@@ -7762,15 +7767,15 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
 
   // If the type was a forward declaration of a class/struct/union
   // type, produce a note.
-  if (Tag && !Tag->getDecl()->isInvalidDecl())
-    Diag(Tag->getDecl()->getLocation(),
+  if (Tag && !Tag->isInvalidDecl())
+    Diag(Tag->getLocation(),
          Tag->isBeingDefined() ? diag::note_type_being_defined
                                : diag::note_forward_declaration)
-      << QualType(Tag, 0);
+      << Context.getTagDeclType(Tag);
 
   // If the Objective-C class was a forward declaration, produce a note.
-  if (IFace && !IFace->getDecl()->isInvalidDecl())
-    Diag(IFace->getDecl()->getLocation(), diag::note_forward_class);
+  if (IFace && !IFace->isInvalidDecl())
+    Diag(IFace->getLocation(), diag::note_forward_class);
 
   // If we have external information that we can use to suggest a fix,
   // produce a note.
@@ -7972,7 +7977,7 @@ static QualType getDecltypeForExpr(Sema &S, Expr *E) {
   } else if (auto *PE = dyn_cast<PredefinedExpr>(E)) {
     return PE->getType();
   }
-  
+
   // C++11 [expr.lambda.prim]p18:
   //   Every occurrence of decltype((x)) where x is a possibly
   //   parenthesized id-expression that names an entity of automatic

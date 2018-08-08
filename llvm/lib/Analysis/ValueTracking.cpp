@@ -71,7 +71,7 @@
 #include <cassert>
 #include <cstdint>
 #include <iterator>
-#include <utility>     
+#include <utility>
 
 using namespace llvm;
 using namespace llvm::PatternMatch;
@@ -1860,19 +1860,42 @@ static bool isKnownNonNullFromDominatingCondition(const Value *V,
         (Pred != ICmpInst::ICMP_EQ && Pred != ICmpInst::ICMP_NE))
       continue;
 
+    SmallVector<const User *, 4> WorkList;
+    SmallPtrSet<const User *, 4> Visited;
     for (auto *CmpU : U->users()) {
-      if (const BranchInst *BI = dyn_cast<BranchInst>(CmpU)) {
-        assert(BI->isConditional() && "uses a comparison!");
+      assert(WorkList.empty() && "Should be!");
+      if (Visited.insert(CmpU).second)
+        WorkList.push_back(CmpU);
 
-        BasicBlock *NonNullSuccessor =
-            BI->getSuccessor(Pred == ICmpInst::ICMP_EQ ? 1 : 0);
-        BasicBlockEdge Edge(BI->getParent(), NonNullSuccessor);
-        if (Edge.isSingleEdge() && DT->dominates(Edge, CtxI->getParent()))
+      while (!WorkList.empty()) {
+        auto *Curr = WorkList.pop_back_val();
+
+        // If a user is an AND, add all its users to the work list. We only
+        // propagate "pred != null" condition through AND because it is only
+        // correct to assume that all conditions of AND are met in true branch.
+        // TODO: Support similar logic of OR and EQ predicate?
+        if (Pred == ICmpInst::ICMP_NE)
+          if (auto *BO = dyn_cast<BinaryOperator>(Curr))
+            if (BO->getOpcode() == Instruction::And) {
+              for (auto *BOU : BO->users())
+                if (Visited.insert(BOU).second)
+                  WorkList.push_back(BOU);
+              continue;
+            }
+
+        if (const BranchInst *BI = dyn_cast<BranchInst>(Curr)) {
+          assert(BI->isConditional() && "uses a comparison!");
+
+          BasicBlock *NonNullSuccessor =
+              BI->getSuccessor(Pred == ICmpInst::ICMP_EQ ? 1 : 0);
+          BasicBlockEdge Edge(BI->getParent(), NonNullSuccessor);
+          if (Edge.isSingleEdge() && DT->dominates(Edge, CtxI->getParent()))
+            return true;
+        } else if (Pred == ICmpInst::ICMP_NE &&
+                   match(Curr, m_Intrinsic<Intrinsic::experimental_guard>()) &&
+                   DT->dominates(cast<Instruction>(Curr), CtxI)) {
           return true;
-      } else if (Pred == ICmpInst::ICMP_NE &&
-                 match(CmpU, m_Intrinsic<Intrinsic::experimental_guard>()) &&
-                 DT->dominates(cast<Instruction>(CmpU), CtxI)) {
-        return true;
+        }
       }
     }
   }
@@ -2337,7 +2360,7 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
 
   case Instruction::Select:
     Tmp = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (Tmp == 1) return 1;  // Early out.
+    if (Tmp == 1) break;
     Tmp2 = ComputeNumSignBits(U->getOperand(2), Depth + 1, Q);
     return std::min(Tmp, Tmp2);
 
@@ -2345,7 +2368,7 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     // Add can have at most one carry bit.  Thus we know that the output
     // is, at worst, one more bit than the inputs.
     Tmp = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
-    if (Tmp == 1) return 1;  // Early out.
+    if (Tmp == 1) break;
 
     // Special case decrementing a value (ADD X, -1):
     if (const auto *CRHS = dyn_cast<Constant>(U->getOperand(1)))
@@ -2365,12 +2388,12 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
       }
 
     Tmp2 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (Tmp2 == 1) return 1;
+    if (Tmp2 == 1) break;
     return std::min(Tmp, Tmp2)-1;
 
   case Instruction::Sub:
     Tmp2 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (Tmp2 == 1) return 1;
+    if (Tmp2 == 1) break;
 
     // Handle NEG.
     if (const auto *CLHS = dyn_cast<Constant>(U->getOperand(0)))
@@ -2393,15 +2416,15 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     // Sub can have at most one carry bit.  Thus we know that the output
     // is, at worst, one more bit than the inputs.
     Tmp = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
-    if (Tmp == 1) return 1;  // Early out.
+    if (Tmp == 1) break;
     return std::min(Tmp, Tmp2)-1;
 
   case Instruction::Mul: {
     // The output of the Mul can be at most twice the valid bits in the inputs.
     unsigned SignBitsOp0 = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
-    if (SignBitsOp0 == 1) return 1;  // Early out.
+    if (SignBitsOp0 == 1) break;
     unsigned SignBitsOp1 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (SignBitsOp1 == 1) return 1;
+    if (SignBitsOp1 == 1) break;
     unsigned OutValidBits =
         (TyBits - SignBitsOp0 + 1) + (TyBits - SignBitsOp1 + 1);
     return OutValidBits > TyBits ? 1 : TyBits - OutValidBits + 1;
@@ -2722,6 +2745,7 @@ bool llvm::CannotBeNegativeZero(const Value *V, const TargetLibraryInfo *TLI,
       break;
     // sqrt(-0.0) = -0.0, no other negative results are possible.
     case Intrinsic::sqrt:
+    case Intrinsic::canonicalize:
       return CannotBeNegativeZero(Call->getArgOperand(0), TLI, Depth + 1);
     // fabs(x) != -0.0
     case Intrinsic::fabs:
@@ -2817,10 +2841,13 @@ static bool cannotBeOrderedLessThanZeroImpl(const Value *V,
     default:
       break;
     case Intrinsic::maxnum:
-      return cannotBeOrderedLessThanZeroImpl(I->getOperand(0), TLI, SignBitOnly,
-                                             Depth + 1) ||
-             cannotBeOrderedLessThanZeroImpl(I->getOperand(1), TLI, SignBitOnly,
-                                             Depth + 1);
+      return (isKnownNeverNaN(I->getOperand(0)) &&
+              cannotBeOrderedLessThanZeroImpl(I->getOperand(0), TLI,
+                                              SignBitOnly, Depth + 1)) ||
+             (isKnownNeverNaN(I->getOperand(1)) &&
+              cannotBeOrderedLessThanZeroImpl(I->getOperand(1), TLI,
+                                              SignBitOnly, Depth + 1));
+
     case Intrinsic::minnum:
       return cannotBeOrderedLessThanZeroImpl(I->getOperand(0), TLI, SignBitOnly,
                                              Depth + 1) &&
@@ -3828,7 +3855,7 @@ static bool checkRippleForSignedAdd(const KnownBits &LHSKnown,
 
   // If either of the values is known to be non-negative, adding them can only
   // overflow if the second is also non-negative, so we can assume that.
-  // Two non-negative numbers will only overflow if there is a carry to the 
+  // Two non-negative numbers will only overflow if there is a carry to the
   // sign bit, so we can check if even when the values are as big as possible
   // there is no overflow to the sign bit.
   if (LHSKnown.isNonNegative() || RHSKnown.isNonNegative()) {
@@ -3855,7 +3882,7 @@ static bool checkRippleForSignedAdd(const KnownBits &LHSKnown,
   }
 
   // If we reached here it means that we know nothing about the sign bits.
-  // In this case we can't know if there will be an overflow, since by 
+  // In this case we can't know if there will be an overflow, since by
   // changing the sign bits any two values can be made to overflow.
   return false;
 }
@@ -3905,7 +3932,7 @@ static OverflowResult computeOverflowForSignedAdd(const Value *LHS,
   // operands.
   bool LHSOrRHSKnownNonNegative =
       (LHSKnown.isNonNegative() || RHSKnown.isNonNegative());
-  bool LHSOrRHSKnownNegative = 
+  bool LHSOrRHSKnownNegative =
       (LHSKnown.isNegative() || RHSKnown.isNegative());
   if (LHSOrRHSKnownNonNegative || LHSOrRHSKnownNegative) {
     KnownBits AddKnown = computeKnownBits(Add, DL, /*Depth=*/0, AC, CxtI, DT);
@@ -4454,7 +4481,7 @@ static SelectPatternResult matchMinMax(CmpInst::Predicate Pred,
   SPR = matchMinMaxOfMinMax(Pred, CmpLHS, CmpRHS, TrueVal, FalseVal, Depth);
   if (SPR.Flavor != SelectPatternFlavor::SPF_UNKNOWN)
     return SPR;
-  
+
   if (Pred != CmpInst::ICMP_SGT && Pred != CmpInst::ICMP_SLT)
     return {SPF_UNKNOWN, SPNB_NA, false};
 
@@ -4511,21 +4538,25 @@ static SelectPatternResult matchMinMax(CmpInst::Predicate Pred,
   return {SPF_UNKNOWN, SPNB_NA, false};
 }
 
-bool llvm::isKnownNegation(const Value *X, const Value *Y) {
+bool llvm::isKnownNegation(const Value *X, const Value *Y, bool NeedNSW) {
   assert(X && Y && "Invalid operand");
 
-  // X = sub (0, Y)
-  if (match(X, m_Neg(m_Specific(Y))))
+  // X = sub (0, Y) || X = sub nsw (0, Y)
+  if ((!NeedNSW && match(X, m_Sub(m_ZeroInt(), m_Specific(Y)))) ||
+      (NeedNSW && match(X, m_NSWSub(m_ZeroInt(), m_Specific(Y)))))
     return true;
 
-  // Y = sub (0, X)
-  if (match(Y, m_Neg(m_Specific(X))))
+  // Y = sub (0, X) || Y = sub nsw (0, X)
+  if ((!NeedNSW && match(Y, m_Sub(m_ZeroInt(), m_Specific(X)))) ||
+      (NeedNSW && match(Y, m_NSWSub(m_ZeroInt(), m_Specific(X)))))
     return true;
 
-  // X = sub (A, B), Y = sub (B, A)
+  // X = sub (A, B), Y = sub (B, A) || X = sub nsw (A, B), Y = sub nsw (B, A)
   Value *A, *B;
-  return match(X, m_Sub(m_Value(A), m_Value(B))) &&
-         match(Y, m_Sub(m_Specific(B), m_Specific(A)));
+  return (!NeedNSW && (match(X, m_Sub(m_Value(A), m_Value(B))) &&
+                        match(Y, m_Sub(m_Specific(B), m_Specific(A))))) ||
+         (NeedNSW && (match(X, m_NSWSub(m_Value(A), m_Value(B))) &&
+                       match(Y, m_NSWSub(m_Specific(B), m_Specific(A)))));
 }
 
 static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
@@ -4626,7 +4657,7 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
     case FCmpInst::FCMP_OLE: return {SPF_FMINNUM, NaNBehavior, Ordered};
     }
   }
-  
+
   if (isKnownNegation(TrueVal, FalseVal)) {
     // Sign-extending LHS does not change its sign, so TrueVal/FalseVal can
     // match against either LHS or sext(LHS).

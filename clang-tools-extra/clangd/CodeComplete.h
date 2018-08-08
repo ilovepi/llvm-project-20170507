@@ -21,6 +21,7 @@
 #include "Protocol.h"
 #include "index/Index.h"
 #include "clang/Frontend/PrecompiledPreamble.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang/Sema/CodeCompleteOptions.h"
 #include "clang/Tooling/CompilationDatabase.h"
 
@@ -76,6 +77,10 @@ struct CodeCompleteOptions {
   /// FIXME(ioeric): we might want a better way to pass the index around inside
   /// clangd.
   const SymbolIndex *Index = nullptr;
+
+  /// Include completions that require small corrections, e.g. change '.' to
+  /// '->' on member access etc.
+  bool IncludeFixIts = false;
 };
 
 // Semi-structured representation of a code-complete suggestion for our C++ API.
@@ -114,6 +119,10 @@ struct CodeCompletion {
   // Present if Header is set and should be inserted to use this item.
   llvm::Optional<TextEdit> HeaderInsertion;
 
+  /// Holds information about small corrections that needs to be done. Like
+  /// converting '->' to '.' on member access.
+  std::vector<TextEdit> FixIts;
+
   // Scores are used to rank completion items.
   struct Scores {
     // The score that items are ranked by.
@@ -144,6 +153,7 @@ raw_ostream &operator<<(raw_ostream &, const CodeCompletion &);
 struct CodeCompleteResult {
   std::vector<CodeCompletion> Completions;
   bool HasMore = false;
+  CodeCompletionContext::Kind Context = CodeCompletionContext::CCC_Other;
 };
 raw_ostream &operator<<(raw_ostream &, const CodeCompleteResult &);
 

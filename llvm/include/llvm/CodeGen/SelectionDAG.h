@@ -1250,8 +1250,8 @@ public:
 
   /// Creates a FrameIndex SDDbgValue node.
   SDDbgValue *getFrameIndexDbgValue(DIVariable *Var, DIExpression *Expr,
-                                    unsigned FI, const DebugLoc &DL,
-                                    unsigned O);
+                                    unsigned FI, bool IsIndirect,
+                                    const DebugLoc &DL, unsigned O);
 
   /// Creates a VReg SDDbgValue node.
   SDDbgValue *getVRegDbgValue(DIVariable *Var, DIExpression *Expr,
@@ -1484,8 +1484,15 @@ public:
   ///     X|Cst == X+Cst iff X&Cst = 0.
   bool isBaseWithConstantOffset(SDValue Op) const;
 
-  /// Test whether the given SDValue is known to never be NaN.
-  bool isKnownNeverNaN(SDValue Op) const;
+  /// Test whether the given SDValue is known to never be NaN. If \p SNaN is
+  /// true, returns if \p Op is known to never be a signaling NaN (it may still
+  /// be a qNaN).
+  bool isKnownNeverNaN(SDValue Op, bool SNaN = false, unsigned Depth = 0) const;
+
+  /// \returns true if \p Op is known to never be a signaling NaN.
+  bool isKnownNeverSNaN(SDValue Op, unsigned Depth = 0) const {
+    return isKnownNeverNaN(Op, true, Depth);
+  }
 
   /// Test whether the given floating point SDValue is known to never be
   /// positive or negative zero.
@@ -1502,6 +1509,15 @@ public:
   /// Return true if A and B have no common bits set. As an example, this can
   /// allow an 'add' to be transformed into an 'or'.
   bool haveNoCommonBitsSet(SDValue A, SDValue B) const;
+
+  /// Match a binop + shuffle pyramid that represents a horizontal reduction
+  /// over the elements of a vector starting from the EXTRACT_VECTOR_ELT node /p
+  /// Extract. The reduction must use one of the opcodes listed in /p
+  /// CandidateBinOps and on success /p BinOp will contain the matching opcode.
+  /// Returns the vector that is being reduced on, or SDValue() if a reduction
+  /// was not matched.
+  SDValue matchBinOpReduction(SDNode *Extract, ISD::NodeType &BinOp,
+                              ArrayRef<ISD::NodeType> CandidateBinOps);
 
   /// Utility function used by legalize and lowering to
   /// "unroll" a vector operation by splitting out the scalars and operating

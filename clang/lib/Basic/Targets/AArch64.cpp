@@ -29,6 +29,8 @@ const Builtin::Info AArch64TargetInfo::BuiltinInfo[] = {
    {#ID, TYPE, ATTRS, nullptr, ALL_LANGUAGES, nullptr},
 #define LANGBUILTIN(ID, TYPE, ATTRS, LANG)                                     \
   {#ID, TYPE, ATTRS, nullptr, LANG, nullptr},
+#define TARGET_HEADER_BUILTIN(ID, TYPE, ATTRS, HEADER, LANGS, FEATURE)         \
+  {#ID, TYPE, ATTRS, HEADER, LANGS, FEATURE},
 #include "clang/Basic/BuiltinsAArch64.def"
 };
 
@@ -529,6 +531,11 @@ void MicrosoftARM64TargetInfo::getTargetDefines(const LangOptions &Opts,
                                                 MacroBuilder &Builder) const {
   WindowsTargetInfo::getTargetDefines(Opts, Builder);
   getVisualStudioDefines(Opts, Builder);
+}
+
+TargetInfo::CallingConvKind
+MicrosoftARM64TargetInfo::getCallingConvKind(bool ClangABICompat4) const {
+  return CCK_MicrosoftWin64;
 }
 
 MinGWARM64TargetInfo::MinGWARM64TargetInfo(const llvm::Triple &Triple,

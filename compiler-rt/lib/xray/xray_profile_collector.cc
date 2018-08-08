@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "xray_profile_collector.h"
+#include "sanitizer_common/sanitizer_allocator_internal.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_vector.h"
 #include "xray_profiling_flags.h"
@@ -34,6 +35,19 @@ struct ThreadTrie {
 struct ProfileBuffer {
   void *Data;
   size_t Size;
+};
+
+// Current version of the profile format.
+constexpr u64 XRayProfilingVersion = 0x20180424;
+
+// Identifier for XRay profiling files 'xrayprof' in hex.
+constexpr u64 XRayMagicBytes = 0x7872617970726f66;
+
+struct XRayProfilingFileHeader {
+  const u64 MagicBytes = XRayMagicBytes;
+  const u64 Version = XRayProfilingVersion;
+  u64 Timestamp = 0; // System time in nanoseconds.
+  u64 PID = 0;       // Process ID.
 };
 
 struct BlockHeader {
@@ -138,7 +152,7 @@ static void populateRecords(ProfileRecordArray &PRs,
                             const FunctionCallTrie &Trie) {
   using StackArray = Array<const FunctionCallTrie::Node *>;
   using StackAllocator = typename StackArray::AllocatorType;
-  StackAllocator StackAlloc(profilingFlags()->stack_allocator_max, 0);
+  StackAllocator StackAlloc(profilingFlags()->stack_allocator_max);
   StackArray DFSStack(StackAlloc);
   for (const auto R : Trie.getRoots()) {
     DFSStack.Append(R);
@@ -146,6 +160,8 @@ static void populateRecords(ProfileRecordArray &PRs,
       auto Node = DFSStack.back();
       DFSStack.trim(1);
       auto Record = PRs.AppendEmplace(PA, Node);
+      if (Record == nullptr)
+        return;
       DCHECK_NE(Record, nullptr);
 
       // Traverse the Node's parents and as we're doing so, get the FIds in
@@ -208,9 +224,9 @@ void serialize() {
   // Then repopulate the global ProfileBuffers.
   for (u32 I = 0; I < ThreadTries->Size(); ++I) {
     using ProfileRecordAllocator = typename ProfileRecordArray::AllocatorType;
-    ProfileRecordAllocator PRAlloc(profilingFlags()->global_allocator_max, 0);
+    ProfileRecordAllocator PRAlloc(profilingFlags()->global_allocator_max);
     ProfileRecord::PathAllocator PathAlloc(
-        profilingFlags()->global_allocator_max, 0);
+        profilingFlags()->global_allocator_max);
     ProfileRecordArray ProfileRecords(PRAlloc);
 
     // First, we want to compute the amount of space we're going to need. We'll
@@ -299,7 +315,22 @@ XRayBuffer nextBuffer(XRayBuffer B) {
   if (ProfileBuffers == nullptr || ProfileBuffers->Size() == 0)
     return {nullptr, 0};
 
-  if (B.Data == nullptr)
+  static pthread_once_t Once = PTHREAD_ONCE_INIT;
+  static typename std::aligned_storage<sizeof(XRayProfilingFileHeader)>::type
+      FileHeaderStorage;
+  pthread_once(&Once,
+               +[] { new (&FileHeaderStorage) XRayProfilingFileHeader{}; });
+
+  if (UNLIKELY(B.Data == nullptr)) {
+    // The first buffer should always contain the file header information.
+    auto &FileHeader =
+        *reinterpret_cast<XRayProfilingFileHeader *>(&FileHeaderStorage);
+    FileHeader.Timestamp = NanoTime();
+    FileHeader.PID = internal_getpid();
+    return {&FileHeaderStorage, sizeof(XRayProfilingFileHeader)};
+  }
+
+  if (UNLIKELY(B.Data == &FileHeaderStorage))
     return {(*ProfileBuffers)[0].Data, (*ProfileBuffers)[0].Size};
 
   BlockHeader Header;

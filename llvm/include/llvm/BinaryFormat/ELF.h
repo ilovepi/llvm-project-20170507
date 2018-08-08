@@ -413,8 +413,10 @@ enum {
 
 // ARM Specific e_flags
 enum : unsigned {
-  EF_ARM_SOFT_FLOAT = 0x00000200U,
-  EF_ARM_VFP_FLOAT = 0x00000400U,
+  EF_ARM_SOFT_FLOAT = 0x00000200U,     // Legacy pre EABI_VER5
+  EF_ARM_ABI_FLOAT_SOFT = 0x00000200U, // EABI_VER5
+  EF_ARM_VFP_FLOAT = 0x00000400U,      // Legacy pre EABI_VER5
+  EF_ARM_ABI_FLOAT_HARD = 0x00000400U, // EABI_VER5
   EF_ARM_EABI_UNKNOWN = 0x00000000U,
   EF_ARM_EABI_VER1 = 0x01000000U,
   EF_ARM_EABI_VER2 = 0x02000000U,
@@ -797,6 +799,8 @@ enum : unsigned {
   SHT_LLVM_ODRTAB = 0x6fff4c00,         // LLVM ODR table.
   SHT_LLVM_LINKER_OPTIONS = 0x6fff4c01, // LLVM Linker Options.
   SHT_LLVM_CALL_GRAPH_PROFILE = 0x6fff4c02, // LLVM Call Graph Profile.
+  SHT_LLVM_ADDRSIG = 0x6fff4c03,        // List of address-significant symbols
+                                        // for safe ICF.
   // Android's experimental support for SHT_RELR sections.
   // https://android.googlesource.com/platform/bionic/+/b7feec74547f84559a1467aca02708ff61346d2a/libc/include/elf.h#512
   SHT_ANDROID_RELR = 0x6fffff00,        // Relocation entries; only offsets.

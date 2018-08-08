@@ -22,6 +22,7 @@
 #include "AST.h"
 #include "CodeCompletionStrings.h"
 #include "Compiler.h"
+#include "Diagnostics.h"
 #include "FileDistance.h"
 #include "FuzzyMatch.h"
 #include "Headers.h"
@@ -270,14 +271,20 @@ struct CodeCompletionBuilder {
     if (C.SemaResult) {
       Completion.Origin |= SymbolOrigin::AST;
       Completion.Name = llvm::StringRef(SemaCCS->getTypedText());
-      if (Completion.Scope.empty())
-        if (C.SemaResult->Kind == CodeCompletionResult::RK_Declaration)
+      if (Completion.Scope.empty()) {
+        if ((C.SemaResult->Kind == CodeCompletionResult::RK_Declaration) ||
+            (C.SemaResult->Kind == CodeCompletionResult::RK_Pattern))
           if (const auto *D = C.SemaResult->getDeclaration())
             if (const auto *ND = llvm::dyn_cast<NamedDecl>(D))
               Completion.Scope =
                   splitQualifiedName(printQualifiedName(*ND)).first;
+      }
       Completion.Kind =
           toCompletionItemKind(C.SemaResult->Kind, C.SemaResult->Declaration);
+      for (const auto &FixIt : C.SemaResult->FixIts) {
+        Completion.FixIts.push_back(
+            toTextEdit(FixIt, ASTCtx.getSourceManager(), ASTCtx.getLangOpts()));
+      }
     }
     if (C.IndexResult) {
       Completion.Origin |= C.IndexResult->Origin;
@@ -394,10 +401,7 @@ llvm::Optional<SymbolID> getSymbolID(const CodeCompletionResult &R) {
   switch (R.Kind) {
   case CodeCompletionResult::RK_Declaration:
   case CodeCompletionResult::RK_Pattern: {
-    llvm::SmallString<128> USR;
-    if (/*Ignore=*/clang::index::generateUSRForDecl(R.Declaration, USR))
-      return None;
-    return SymbolID(USR);
+    return clang::clangd::getSymbolID(R.Declaration);
   }
   case CodeCompletionResult::RK_Macro:
     // FIXME: Macros do have USRs, but the CCR doesn't contain enough info.
@@ -702,7 +706,7 @@ public:
           CurrentArg, S, *Allocator, CCTUInfo, true);
       assert(CCS && "Expected the CodeCompletionString to be non-null");
       // FIXME: for headers, we need to get a comment from the index.
-      SigHelp.signatures.push_back(ProcessOverloadCandidate(
+      SigHelp.signatures.push_back(processOverloadCandidate(
           Candidate, *CCS,
           getParameterDocComment(S.getASTContext(), Candidate, CurrentArg,
                                  /*CommentsFromHeaders=*/false)));
@@ -717,7 +721,7 @@ private:
   // FIXME(ioeric): consider moving CodeCompletionString logic here to
   // CompletionString.h.
   SignatureInformation
-  ProcessOverloadCandidate(const OverloadCandidate &Candidate,
+  processOverloadCandidate(const OverloadCandidate &Candidate,
                            const CodeCompletionString &CCS,
                            llvm::StringRef DocComment) const {
     SignatureInformation Result;
@@ -907,6 +911,7 @@ clang::CodeCompleteOptions CodeCompleteOptions::getClangCompleteOpts() const {
   // the index can provide results from the preamble.
   // Tell Sema not to deserialize the preamble to look for results.
   Result.LoadExternal = !Index;
+  Result.IncludeFixIts = IncludeFixIts;
 
   return Result;
 }
@@ -1060,6 +1065,7 @@ private:
       Output.Completions.back().Score = C.second;
     }
     Output.HasMore = Incomplete;
+    Output.Context = Recorder->CCContext.getKind();
     return Output;
   }
 
@@ -1090,8 +1096,8 @@ private:
   // Groups overloads if desired, to form CompletionCandidate::Bundles.
   // The bundles are scored and top results are returned, best to worst.
   std::vector<ScoredBundle>
-  mergeResults(const std::vector<CodeCompletionResult> &SemaResults,
-               const SymbolSlab &IndexResults) {
+      mergeResults(const std::vector<CodeCompletionResult> &SemaResults,
+                   const SymbolSlab &IndexResults) {
     trace::Span Tracer("Merge and score results");
     std::vector<CompletionCandidate::Bundle> Bundles;
     llvm::DenseMap<size_t, size_t> BundleLookup;
@@ -1154,6 +1160,7 @@ private:
                     CompletionCandidate::Bundle Bundle) {
     SymbolQualitySignals Quality;
     SymbolRelevanceSignals Relevance;
+    Relevance.Context = Recorder->CCContext.getKind();
     Relevance.Query = SymbolRelevanceSignals::CodeComplete;
     Relevance.FileProximityMatch = FileProximity.getPointer();
     auto &First = Bundle.front();
@@ -1271,13 +1278,18 @@ CompletionItem CodeCompletion::render(const CodeCompleteOptions &Opts) const {
   LSP.documentation = Documentation;
   LSP.sortText = sortText(Score.Total, Name);
   LSP.filterText = Name;
+  // FIXME(kadircet): Use LSP.textEdit instead of insertText, because it causes
+  // undesired behaviours. Like completing "this.^" into "this-push_back".
   LSP.insertText = RequiredQualifier + Name;
   if (Opts.EnableSnippets)
     LSP.insertText += SnippetSuffix;
   LSP.insertTextFormat = Opts.EnableSnippets ? InsertTextFormat::Snippet
                                              : InsertTextFormat::PlainText;
+  LSP.additionalTextEdits.reserve(FixIts.size() + (HeaderInsertion ? 1 : 0));
+  for (const auto &FixIt : FixIts)
+    LSP.additionalTextEdits.push_back(FixIt);
   if (HeaderInsertion)
-    LSP.additionalTextEdits = {*HeaderInsertion};
+    LSP.additionalTextEdits.push_back(*HeaderInsertion);
   return LSP;
 }
 
@@ -1288,6 +1300,7 @@ raw_ostream &operator<<(raw_ostream &OS, const CodeCompletion &C) {
 
 raw_ostream &operator<<(raw_ostream &OS, const CodeCompleteResult &R) {
   OS << "CodeCompleteResult: " << R.Completions.size() << (R.HasMore ? "+" : "")
+     << " (" << getCompletionKindString(R.Context) << ")"
      << " items:\n";
   for (const auto &C : R.Completions)
     OS << C << "\n";

@@ -1,3 +1,16 @@
+//===-- syringe_rt.cpp ------------------------------------------*- C++ -*-===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// This file is a part of Syringe, a dynamic behavior injection system.
+//
+// APIs for using the Syringe Runtime.
+//===----------------------------------------------------------------------===//
 
 #include <iostream>
 #include <vector>
@@ -33,13 +46,12 @@ void printSyringeData() {
 
   std::cout << std::endl;
 }
+
 } // end namespace __syringe
 
-// extern "C" {
 
 void __syringe_register(void *OrigFunc, void *StubImpl, void *DetourFunc,
                         void **ImplPtr) {
   __syringe::registerInjection((fptr_t)OrigFunc, (fptr_t)StubImpl,
                                (fptr_t)DetourFunc, (fptr_t *)ImplPtr);
 }
-//}// end extern

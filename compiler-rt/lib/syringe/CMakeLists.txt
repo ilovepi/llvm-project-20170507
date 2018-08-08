@@ -61,12 +61,12 @@ if (APPLE)
     DEFS ${SYRINGE_COMMON_DEFINITIONS}
     DEPS ${SYRINGE_DEPS})
 
-    # We only support running on osx for now.
+  # We only support running on osx for now.
   add_compiler_rt_runtime(clang_rt.syringe
     STATIC
     OS ${SYRINGE_SUPPORTED_OS}
     ARCHS ${SYRINGE_SUPPORTED_ARCH}
-      #ARCHS ${arch}
+
     OBJECT_LIBS RTSyringe
                 RTSanitizerCommon
                 RTSanitizerCommonLibc
@@ -75,7 +75,7 @@ if (APPLE)
     LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS} ${WEAK_SYMBOL_LINK_FLAGS}
     LINK_LIBS ${SYRINGE_LINK_LIBS}
     PARENT_TARGET syringe)
- 
+
 else() # not Apple
   foreach(arch ${SYRINGE_SUPPORTED_ARCH})
     if(NOT CAN_TARGET_${arch})

@@ -122,8 +122,11 @@ protected:
   SDValue LowerDIVREM24(SDValue Op, SelectionDAG &DAG, bool sign) const;
   void LowerUDIVREM64(SDValue Op, SelectionDAG &DAG,
                                     SmallVectorImpl<SDValue> &Results) const;
-  void analyzeFormalArgumentsCompute(CCState &State,
-                              const SmallVectorImpl<ISD::InputArg> &Ins) const;
+
+  void analyzeFormalArgumentsCompute(
+    CCState &State,
+    const SmallVectorImpl<ISD::InputArg> &Ins) const;
+
 public:
   AMDGPUTargetLowering(const TargetMachine &TM, const AMDGPUSubtarget &STI);
 
@@ -242,6 +245,11 @@ public:
   unsigned ComputeNumSignBitsForTargetNode(SDValue Op, const APInt &DemandedElts,
                                            const SelectionDAG &DAG,
                                            unsigned Depth = 0) const override;
+
+  bool isKnownNeverNaNForTargetNode(SDValue Op,
+                                    const SelectionDAG &DAG,
+                                    bool SNaN = false,
+                                    unsigned Depth = 0) const override;
 
   /// Helper function that adds Reg to the LiveIn list of the DAG's
   /// MachineFunction.

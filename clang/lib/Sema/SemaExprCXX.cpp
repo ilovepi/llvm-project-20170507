@@ -113,9 +113,15 @@ ParsedType Sema::getConstructorName(IdentifierInfo &II,
       break;
     }
   }
-  if (!InjectedClassName && CurClass->isInvalidDecl())
+  if (!InjectedClassName) {
+    if (!CurClass->isInvalidDecl()) {
+      // FIXME: RequireCompleteDeclContext doesn't check dependent contexts
+      // properly. Work around it here for now.
+      Diag(SS.getLastQualifierNameLoc(),
+           diag::err_incomplete_nested_name_spec) << CurClass << SS.getRange();
+    }
     return ParsedType();
-  assert(InjectedClassName && "couldn't find injected class name");
+  }
 
   QualType T = Context.getTypeDeclType(InjectedClassName);
   DiagnoseUseOfDecl(InjectedClassName, NameLoc);
@@ -1660,9 +1666,9 @@ Sema::ActOnCXXNew(SourceLocation StartLoc, bool UseGlobal,
       if (Expr *NumElts = (Expr *)Array.NumElts) {
         if (!NumElts->isTypeDependent() && !NumElts->isValueDependent()) {
           if (getLangOpts().CPlusPlus14) {
-	    // C++1y [expr.new]p6: Every constant-expression in a noptr-new-declarator
-	    //   shall be a converted constant expression (5.19) of type std::size_t
-	    //   and shall evaluate to a strictly positive value.
+            // C++1y [expr.new]p6: Every constant-expression in a noptr-new-declarator
+            //   shall be a converted constant expression (5.19) of type std::size_t
+            //   and shall evaluate to a strictly positive value.
             unsigned IntWidth = Context.getTargetInfo().getIntWidth();
             assert(IntWidth && "Builtin type of size 0?");
             llvm::APSInt Value(IntWidth);
@@ -1741,9 +1747,9 @@ static void diagnoseUnavailableAlignedAllocation(const FunctionDecl &FD,
     StringRef OSName = AvailabilityAttr::getPlatformNameSourceSpelling(
         S.getASTContext().getTargetInfo().getPlatformName());
 
-    S.Diag(Loc, diag::warn_aligned_allocation_unavailable)
-         << IsDelete << FD.getType().getAsString() << OSName
-         << alignedAllocMinVersion(T.getOS()).getAsString();
+    S.Diag(Loc, diag::err_aligned_allocation_unavailable)
+        << IsDelete << FD.getType().getAsString() << OSName
+        << alignedAllocMinVersion(T.getOS()).getAsString();
     S.Diag(Loc, diag::note_silence_unligned_allocation_unavailable);
   }
 }
@@ -1864,13 +1870,6 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
   if (CheckAllocatedType(AllocType, TypeRange.getBegin(), TypeRange))
     return ExprError();
 
-  if (initStyle == CXXNewExpr::ListInit &&
-      isStdInitializerList(AllocType, nullptr)) {
-    Diag(AllocTypeInfo->getTypeLoc().getBeginLoc(),
-         diag::warn_dangling_std_initializer_list)
-        << /*at end of FE*/0 << Inits[0]->getSourceRange();
-  }
-
   // In ARC, infer 'retaining' for the allocated
   if (getLangOpts().ObjCAutoRefCount &&
       AllocType.getObjCLifetime() == Qualifiers::OCL_None &&
@@ -1900,7 +1899,7 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
       assert(Context.getTargetInfo().getIntWidth() && "Builtin type of size 0?");
 
       ConvertedSize = PerformImplicitConversion(ArraySize, Context.getSizeType(),
-						AA_Converting);
+                                                AA_Converting);
 
       if (!ConvertedSize.isInvalid() &&
           ArraySize->getType()->getAs<RecordType>())
@@ -7121,10 +7120,17 @@ ExprResult Sema::ActOnPseudoDestructorExpr(Scope *S, Expr *Base,
 ExprResult Sema::BuildCXXMemberCallExpr(Expr *E, NamedDecl *FoundDecl,
                                         CXXConversionDecl *Method,
                                         bool HadMultipleCandidates) {
+  // Convert the expression to match the conversion function's implicit object
+  // parameter.
+  ExprResult Exp = PerformObjectArgumentInitialization(E, /*Qualifier=*/nullptr,
+                                          FoundDecl, Method);
+  if (Exp.isInvalid())
+    return true;
+
   if (Method->getParent()->isLambda() &&
       Method->getConversionType()->isBlockPointerType()) {
     // This is a lambda coversion to block pointer; check if the argument
-    // is a LambdaExpr.
+    // was a LambdaExpr.
     Expr *SubE = E;
     CastExpr *CE = dyn_cast<CastExpr>(SubE);
     if (CE && CE->getCastKind() == CK_NoOp)
@@ -7141,21 +7147,15 @@ ExprResult Sema::BuildCXXMemberCallExpr(Expr *E, NamedDecl *FoundDecl,
       DiagnosticErrorTrap Trap(Diags);
       PushExpressionEvaluationContext(
           ExpressionEvaluationContext::PotentiallyEvaluated);
-      ExprResult Exp = BuildBlockForLambdaConversion(E->getExprLoc(),
-                                                     E->getExprLoc(),
-                                                     Method, E);
+      ExprResult BlockExp = BuildBlockForLambdaConversion(
+          Exp.get()->getExprLoc(), Exp.get()->getExprLoc(), Method, Exp.get());
       PopExpressionEvaluationContext();
 
-      if (Exp.isInvalid())
-        Diag(E->getExprLoc(), diag::note_lambda_to_block_conv);
-      return Exp;
+      if (BlockExp.isInvalid())
+        Diag(Exp.get()->getExprLoc(), diag::note_lambda_to_block_conv);
+      return BlockExp;
     }
   }
-
-  ExprResult Exp = PerformObjectArgumentInitialization(E, /*Qualifier=*/nullptr,
-                                          FoundDecl, Method);
-  if (Exp.isInvalid())
-    return true;
 
   MemberExpr *ME = new (Context) MemberExpr(
       Exp.get(), /*IsArrow=*/false, SourceLocation(), Method, SourceLocation(),

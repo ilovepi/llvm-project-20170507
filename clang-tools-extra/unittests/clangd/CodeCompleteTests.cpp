@@ -18,6 +18,7 @@
 #include "SyncAPI.h"
 #include "TestFS.h"
 #include "index/MemIndex.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Testing/Support/Error.h"
 #include "gmock/gmock.h"
@@ -76,6 +77,23 @@ std::unique_ptr<SymbolIndex> memIndex(std::vector<Symbol> Symbols) {
   for (const auto &Sym : Symbols)
     Slab.insert(Sym);
   return MemIndex::build(std::move(Slab).build());
+}
+
+CodeCompleteResult completions(ClangdServer &Server, StringRef TestCode,
+                               Position point,
+                               std::vector<Symbol> IndexSymbols = {},
+                               clangd::CodeCompleteOptions Opts = {}) {
+  std::unique_ptr<SymbolIndex> OverrideIndex;
+  if (!IndexSymbols.empty()) {
+    assert(!Opts.Index && "both Index and IndexSymbols given!");
+    OverrideIndex = memIndex(std::move(IndexSymbols));
+    Opts.Index = OverrideIndex.get();
+  }
+
+  auto File = testPath("foo.cpp");
+  runAddDocument(Server, File, TestCode);
+  auto CompletionList = cantFail(runCodeComplete(Server, File, point, Opts));
+  return CompletionList;
 }
 
 CodeCompleteResult completions(ClangdServer &Server, StringRef Text,
@@ -475,11 +493,12 @@ TEST(CompletionTest, ScopedWithFilter) {
 }
 
 TEST(CompletionTest, ReferencesAffectRanking) {
-  auto Results = completions("int main() { abs^ }", {ns("absl"), func("abs")});
-  EXPECT_THAT(Results.Completions, HasSubsequence(Named("abs"), Named("absl")));
+  auto Results = completions("int main() { abs^ }", {ns("absl"), func("absb")});
+  EXPECT_THAT(Results.Completions, HasSubsequence(Named("absb"), Named("absl")));
   Results = completions("int main() { abs^ }",
-                        {withReferences(10000, ns("absl")), func("abs")});
-  EXPECT_THAT(Results.Completions, HasSubsequence(Named("absl"), Named("abs")));
+                        {withReferences(10000, ns("absl")), func("absb")});
+  EXPECT_THAT(Results.Completions,
+              HasSubsequence(Named("absl"), Named("absb")));
 }
 
 TEST(CompletionTest, GlobalQualified) {
@@ -890,6 +909,10 @@ public:
 
   void lookup(const LookupRequest &,
               llvm::function_ref<void(const Symbol &)>) const override {}
+
+  void findOccurrences(const OccurrencesRequest &Req,
+                       llvm::function_ref<void(const SymbolOccurrence &)>
+                           Callback) const override {}
 
   const std::vector<FuzzyFindRequest> allRequests() const { return Requests; }
 
@@ -1307,6 +1330,112 @@ TEST(CompletionTest, IgnoreRecoveryResults) {
           }
       )cpp");
   EXPECT_THAT(Results.Completions, UnorderedElementsAre(Named("NotRecovered")));
+}
+
+TEST(CompletionTest, ScopeOfClassFieldInConstructorInitializer) {
+  auto Results = completions(
+      R"cpp(
+        namespace ns {
+          class X { public: X(); int x_; };
+          X::X() : x_^(0) {}
+        }
+      )cpp");
+  EXPECT_THAT(Results.Completions,
+              UnorderedElementsAre(AllOf(Scope("ns::X::"), Named("x_"))));
+}
+
+TEST(CompletionTest, CodeCompletionContext) {
+  auto Results = completions(
+      R"cpp(
+        namespace ns {
+          class X { public: X(); int x_; };
+          void f() {
+            X x;
+            x.^;
+          }
+        }
+      )cpp");
+
+  EXPECT_THAT(Results.Context, CodeCompletionContext::CCC_DotMemberAccess);
+}
+
+TEST(CompletionTest, FixItForArrowToDot) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
+
+  CodeCompleteOptions Opts;
+  Opts.IncludeFixIts = true;
+  Annotations TestCode(
+      R"cpp(
+        class Auxilary {
+         public:
+          void AuxFunction();
+        };
+        class ClassWithPtr {
+         public:
+          void MemberFunction();
+          Auxilary* operator->() const;
+          Auxilary* Aux;
+        };
+        void f() {
+          ClassWithPtr x;
+          x[[->]]^;
+        }
+      )cpp");
+  auto Results =
+      completions(Server, TestCode.code(), TestCode.point(), {}, Opts);
+  EXPECT_EQ(Results.Completions.size(), 3u);
+
+  TextEdit ReplacementEdit;
+  ReplacementEdit.range = TestCode.range();
+  ReplacementEdit.newText = ".";
+  for (const auto &C : Results.Completions) {
+    EXPECT_TRUE(C.FixIts.size() == 1u || C.Name == "AuxFunction");
+    if (!C.FixIts.empty())
+      EXPECT_THAT(C.FixIts, ElementsAre(ReplacementEdit));
+  }
+}
+
+TEST(CompletionTest, FixItForDotToArrow) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
+
+  CodeCompleteOptions Opts;
+  Opts.IncludeFixIts = true;
+  Annotations TestCode(
+      R"cpp(
+        class Auxilary {
+         public:
+          void AuxFunction();
+        };
+        class ClassWithPtr {
+         public:
+          void MemberFunction();
+          Auxilary* operator->() const;
+          Auxilary* Aux;
+        };
+        void f() {
+          ClassWithPtr x;
+          x[[.]]^;
+        }
+      )cpp");
+  auto Results =
+      completions(Server, TestCode.code(), TestCode.point(), {}, Opts);
+  EXPECT_EQ(Results.Completions.size(), 3u);
+
+  TextEdit ReplacementEdit;
+  ReplacementEdit.range = TestCode.range();
+  ReplacementEdit.newText = "->";
+  for (const auto &C : Results.Completions) {
+    EXPECT_TRUE(C.FixIts.empty() || C.Name == "AuxFunction");
+    if (!C.FixIts.empty()) {
+      EXPECT_THAT(C.FixIts, ElementsAre(ReplacementEdit));
+    }
+  }
 }
 
 } // namespace

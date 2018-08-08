@@ -25,6 +25,19 @@ class SITargetLowering final : public AMDGPUTargetLowering {
 private:
   const GCNSubtarget *Subtarget;
 
+public:
+  MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                    CallingConv::ID CC,
+                                    EVT VT) const override;
+  unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                         CallingConv::ID CC,
+                                         EVT VT) const override;
+
+  unsigned getVectorTypeBreakdownForCallingConv(
+    LLVMContext &Context, CallingConv::ID CC, EVT VT, EVT &IntermediateVT,
+    unsigned &NumIntermediates, MVT &RegisterVT) const override;
+
+private:
   SDValue lowerKernArgParameterPtr(SelectionDAG &DAG, const SDLoc &SL,
                                    SDValue Chain, uint64_t Offset) const;
   SDValue getImplicitArgPtr(SelectionDAG &DAG, const SDLoc &SL) const;
@@ -68,7 +81,7 @@ private:
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue adjustLoadValueType(unsigned Opcode, MemSDNode *M,
-                              SelectionDAG &DAG,
+                              SelectionDAG &DAG, ArrayRef<SDValue> Ops,
                               bool IsIntrinsic = false) const;
 
   SDValue handleD16VData(SDValue VData, SelectionDAG &DAG) const;
@@ -117,6 +130,8 @@ private:
   SDValue performXorCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performZeroExtendCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performClassCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue getCanonicalConstantFP(SelectionDAG &DAG, const SDLoc &SL, EVT VT,
+                                 const APFloat &C) const;
   SDValue performFCanonicalizeCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   SDValue performFPMed3ImmCombine(SelectionDAG &DAG, const SDLoc &SL,
@@ -310,6 +325,10 @@ public:
 
   bool isSDNodeSourceOfDivergence(const SDNode *N,
     FunctionLoweringInfo *FLI, DivergenceAnalysis *DA) const override;
+
+  bool isCanonicalized(SelectionDAG &DAG, SDValue Op,
+                       unsigned MaxDepth = 5) const;
+  bool denormalsEnabledForType(EVT VT) const;
 };
 
 } // End namespace llvm

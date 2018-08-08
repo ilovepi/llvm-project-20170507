@@ -1,3 +1,18 @@
+//===- syringe_rt.h -----------------------------------------*- C++ -*-===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// This file is a part of Syringe, a dynamic behavior injection system.
+//
+// APIs for using the Syringe Runtime.
+//===----------------------------------------------------------------------===//
+
+
 #ifndef SYRINGE_SYRINGE_RT_H
 #define SYRINGE_SYRINGE_RT_H 1
 
@@ -53,6 +68,8 @@ template <typename T> bool toggleImpl(T OrigFunc) {
 
 /// Toggle virutal function implementation
 /// Currently only works for Itanium ABI
+/// @OrigFunc pointer to the member function
+/// @Instance address of an instance of the class in question
 template <typename T, typename R>
 bool toggleVirtualImpl(T OrigFunc, R Instance) {
   // use char * to represent vtbl address for easy indexing
@@ -63,6 +80,7 @@ bool toggleVirtualImpl(T OrigFunc, R Instance) {
 
   // get the vtbl for the passed in instance
   vtblptr_t *PtrToVtblPtr = (vtblptr_t *)Instance;
+
   // on itanium the vtable pointer is the at the instance's address
   auto VtblPtr = *PtrToVtblPtr;
 
@@ -96,18 +114,9 @@ template <typename T> bool changeImpl(T OrigFunc, T NewImpl) {
 }
 
 template <typename T> fptr_t lookupMemberFunctionAddr(T FPtr) {
-  // fptr_t ret = nullptr;
-  // if(std::is_member_function_pointer<T>::value)
-  //{
-  // check if function is virtual
+  assert(FPtr != nullptr && "Syringe Member Function Lookup was passed a nullptr!");
   mPtrTy *j = (mPtrTy *)FPtr;
   return (fptr_t)(j->ptr);
-
-  // handle non virtual funcitons
-
-  //}
-
-  // return ret;
 }
 
 void printSyringeData();

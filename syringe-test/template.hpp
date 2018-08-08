@@ -22,7 +22,9 @@ public:
 template <typename T> class BadAdder : public Adder<T> {
 public:
   BadAdder(T initialValue) : Adder<T>(initialValue) {}
-  [[clang::syringe_payload("_ZN5AdderIiE3addEi")]] T add(T a) { return this->data - a; }
+  [[clang::syringe_payload("_ZN5AdderIiE3addEi")]] T add(T a) {
+    return this->data - a;
+  }
 };
 
 #endif /* ifndef TEMPLATE_HPP_ */

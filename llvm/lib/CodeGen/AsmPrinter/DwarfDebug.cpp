@@ -94,6 +94,11 @@ static cl::opt<bool> GenerateARangeSection("generate-arange-section",
                                            cl::desc("Generate dwarf aranges"),
                                            cl::init(false));
 
+static cl::opt<bool>
+    GenerateDwarfTypeUnits("generate-type-units", cl::Hidden,
+                           cl::desc("Generate DWARF4 type units."),
+                           cl::init(false));
+
 static cl::opt<bool> SplitDwarfCrossCuReferences(
     "split-dwarf-cross-cu-references", cl::Hidden,
     cl::desc("Enable cross-cu references in DWO files"), cl::init(false));
@@ -284,6 +289,29 @@ void DbgVariable::addMMIEntry(const DbgVariable &V) {
          "conflicting locations for variable");
 }
 
+static AccelTableKind computeAccelTableKind(unsigned DwarfVersion,
+                                            bool GenerateTypeUnits,
+                                            DebuggerKind Tuning,
+                                            const Triple &TT) {
+  // Honor an explicit request.
+  if (AccelTables != AccelTableKind::Default)
+    return AccelTables;
+
+  // Accelerator tables with type units are currently not supported.
+  if (GenerateTypeUnits)
+    return AccelTableKind::None;
+
+  // Accelerator tables get emitted if targetting DWARF v5 or LLDB.  DWARF v5
+  // always implies debug_names. For lower standard versions we use apple
+  // accelerator tables on apple platforms and debug_names elsewhere.
+  if (DwarfVersion >= 5)
+    return AccelTableKind::Dwarf;
+  if (Tuning == DebuggerKind::LLDB)
+    return TT.isOSBinFormatMachO() ? AccelTableKind::Apple
+                                   : AccelTableKind::Dwarf;
+  return AccelTableKind::None;
+}
+
 DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
     : DebugHandlerBase(A), DebugLocs(A->OutStreamer->isVerboseAsm()),
       InfoHolder(A, "info_string", DIEValueAllocator),
@@ -301,16 +329,6 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
     DebuggerTuning = DebuggerKind::SCE;
   else
     DebuggerTuning = DebuggerKind::GDB;
-
-  // Turn on accelerator tables by default, if tuning for LLDB and the target is
-  // supported.
-  if (AccelTables == AccelTableKind::Default) {
-    if (tuneForLLDB() && A->TM.getTargetTriple().isOSBinFormatMachO())
-      TheAccelTableKind = AccelTableKind::Apple;
-    else
-      TheAccelTableKind = AccelTableKind::None;
-  } else
-    TheAccelTableKind = AccelTables;
 
   if (DwarfInlinedStrings == Default)
     UseInlineStrings = TT.isNVPTX();
@@ -345,6 +363,13 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
     UseSectionsAsReferences = TT.isNVPTX();
   else
     UseSectionsAsReferences = DwarfSectionsAsReferences == Enable;
+
+  // Don't generate type units for unsupported object file formats.
+  GenerateTypeUnits =
+      A->TM.getTargetTriple().isOSBinFormatELF() && GenerateDwarfTypeUnits;
+
+  TheAccelTableKind = computeAccelTableKind(
+      DwarfVersion, GenerateTypeUnits, DebuggerTuning, A->TM.getTargetTriple());
 
   // Work around a GDB bug. GDB doesn't support the standard opcode;
   // SCE doesn't support GNU's; LLDB prefers the standard opcode, which
@@ -519,7 +544,7 @@ DwarfDebug::getOrCreateDwarfCompileUnit(const DICompileUnit *DIUnit) {
 
   StringRef Producer = DIUnit->getProducer();
   StringRef Flags = DIUnit->getFlags();
-  if (!Flags.empty()) {
+  if (!Flags.empty() && !useAppleExtensionAttributes()) {
     std::string ProducerWithFlags = Producer.str() + " " + Flags.str();
     NewCU.addString(Die, dwarf::DW_AT_producer, ProducerWithFlags);
   } else
@@ -743,6 +768,8 @@ void DwarfDebug::finalizeModuleInfo() {
   // all other generation.
   for (const auto &P : CUMap) {
     auto &TheCU = *P.second;
+    if (TheCU.getCUNode()->isDebugDirectivesOnly())
+      continue;
     // Emit DW_AT_containing_type attribute to connect types with their
     // vtable holding type.
     TheCU.constructContainingTypeDIEs();
@@ -796,6 +823,10 @@ void DwarfDebug::finalizeModuleInfo() {
         U.setBaseAddress(TheCU.getRanges().front().getStart());
       U.attachRangesOrLowHighPC(U.getUnitDie(), TheCU.takeRanges());
     }
+
+    if (getDwarfVersion() >= 5 && !useSplitDwarf() &&
+        !U.getRangeLists().empty())
+      U.addRnglistsBase();
 
     auto *CUNode = cast<DICompileUnit>(P.first);
     // If compile Unit has macros, emit "DW_AT_macro_info" attribute.
@@ -859,8 +890,7 @@ void DwarfDebug::endModule() {
     emitDebugInfoDWO();
     emitDebugAbbrevDWO();
     emitDebugLineDWO();
-    // Emit DWO addresses.
-    AddrPool.emit(*Asm, Asm->getObjFileLowering().getDwarfAddrSection());
+    emitDebugAddr();
   }
 
   // Emit info into the dwarf accelerator table sections.
@@ -1388,6 +1418,11 @@ void DwarfDebug::endFunctionImpl(const MachineFunction *MF) {
   LexicalScope *FnScope = LScopes.getCurrentFunctionScope();
   assert(!FnScope || SP == FnScope->getScopeNode());
   DwarfCompileUnit &TheCU = *CUMap.lookup(SP->getUnit());
+  if (TheCU.getCUNode()->isDebugDirectivesOnly()) {
+    PrevLabel = nullptr;
+    CurFn = nullptr;
+    return;
+  }
 
   DenseSet<InlinedVariable> ProcessedVars;
   collectVariableInfo(TheCU, SP, ProcessedVars);
@@ -1483,8 +1518,9 @@ void DwarfDebug::emitAbbreviations() {
 
 void DwarfDebug::emitStringOffsetsTableHeader() {
   DwarfFile &Holder = useSplitDwarf() ? SkeletonHolder : InfoHolder;
-  Holder.emitStringOffsetsTableHeader(
-      Asm->getObjFileLowering().getDwarfStrOffSection());
+  Holder.getStringPool().emitStringOffsetsTableHeader(
+      *Asm, Asm->getObjFileLowering().getDwarfStrOffSection(),
+      Holder.getStringOffsetsStartSym());
 }
 
 template <typename AccelTableT>
@@ -2002,22 +2038,23 @@ static void emitRangeList(AsmPrinter *Asm, DwarfCompileUnit *CU,
     // or optnone where there may be holes in a single CU's section
     // contributions.
     auto *Base = CUBase;
-    if (!Base && P.second.size() > 1 && UseDwarfRangesBaseAddressSpecifier) {
+    if (!Base && P.second.size() > 1 &&
+        (UseDwarfRangesBaseAddressSpecifier || DwarfVersion >= 5)) {
       BaseIsSet = true;
       // FIXME/use care: This may not be a useful base address if it's not
       // the lowest address/range in this object.
       Base = P.second.front()->getStart();
-      if (DwarfVersion >= 5)
+      if (DwarfVersion >= 5) {
+        Asm->OutStreamer->AddComment("DW_RLE_base_address");
         Asm->OutStreamer->EmitIntValue(dwarf::DW_RLE_base_address, 1);
-      else
+      } else
         Asm->OutStreamer->EmitIntValue(-1, Size);
+      Asm->OutStreamer->AddComment("  base address");
       Asm->OutStreamer->EmitSymbolValue(Base, Size);
-    } else if (BaseIsSet) {
+    } else if (BaseIsSet && DwarfVersion < 5) {
       BaseIsSet = false;
-      if (DwarfVersion >= 5)
-        Asm->OutStreamer->EmitIntValue(dwarf::DW_RLE_base_address, 1);
-      else
-        Asm->OutStreamer->EmitIntValue(-1, Size);
+      assert(!Base);
+      Asm->OutStreamer->EmitIntValue(-1, Size);
       Asm->OutStreamer->EmitIntValue(0, Size);
     }
 
@@ -2029,16 +2066,22 @@ static void emitRangeList(AsmPrinter *Asm, DwarfCompileUnit *CU,
       if (Base) {
         if (DwarfVersion >= 5) {
           // Emit DW_RLE_offset_pair when we have a base.
+          Asm->OutStreamer->AddComment("DW_RLE_offset_pair");
           Asm->OutStreamer->EmitIntValue(dwarf::DW_RLE_offset_pair, 1);
+          Asm->OutStreamer->AddComment("  starting offset");
           Asm->EmitLabelDifferenceAsULEB128(Begin, Base);
+          Asm->OutStreamer->AddComment("  ending offset");
           Asm->EmitLabelDifferenceAsULEB128(End, Base);
         } else {
           Asm->EmitLabelDifference(Begin, Base, Size);
           Asm->EmitLabelDifference(End, Base, Size);
         }
       } else if (DwarfVersion >= 5) {
+        Asm->OutStreamer->AddComment("DW_RLE_start_length");
         Asm->OutStreamer->EmitIntValue(dwarf::DW_RLE_start_length, 1);
+        Asm->OutStreamer->AddComment("  start");
         Asm->OutStreamer->EmitSymbolValue(Begin, Size);
+        Asm->OutStreamer->AddComment("  length");
         Asm->EmitLabelDifferenceAsULEB128(End, Begin);
       } else {
         Asm->OutStreamer->EmitSymbolValue(Begin, Size);
@@ -2046,32 +2089,20 @@ static void emitRangeList(AsmPrinter *Asm, DwarfCompileUnit *CU,
       }
     }
   }
-  if (DwarfVersion >= 5)
+  if (DwarfVersion >= 5) {
+    Asm->OutStreamer->AddComment("DW_RLE_end_of_list");
     Asm->OutStreamer->EmitIntValue(dwarf::DW_RLE_end_of_list, 1);
-  else {
+  } else {
     // Terminate the list with two 0 values.
     Asm->OutStreamer->EmitIntValue(0, Size);
     Asm->OutStreamer->EmitIntValue(0, Size);
   }
 }
 
-void DwarfDebug::emitDebugRnglists() {
-
-  // Don't emit a rangelist table if there are no ranges.
-  if (llvm::all_of(CUMap,
-                   [](const decltype(CUMap)::const_iterator::value_type &Pair) {
-                     DwarfCompileUnit *TheCU = Pair.second;
-                     if (auto *Skel = TheCU->getSkeleton())
-                       TheCU = Skel;
-                     return TheCU->getRangeLists().empty();
-                   }))
-    return;
-
-  assert(getDwarfVersion() >= 5 && "Dwarf version must be 5 or greater");
-  // FIXME: As long as we don't support DW_RLE_base_addrx, we cannot generate
-  // any tables in the .debug_rnglists.dwo section.
-  Asm->OutStreamer->SwitchSection(
-      Asm->getObjFileLowering().getDwarfRnglistsSection());
+// Emit the header of a DWARF 5 range list table. Returns the symbol that
+// designates the end of the table for the caller to emit when the table is
+// complete.
+static MCSymbol *emitRnglistsTableHeader(AsmPrinter *Asm, DwarfFile &Holder) {
   // The length is described by a starting label right after the length field
   // and an end label.
   MCSymbol *TableStart = Asm->createTempSymbol("debug_rnglist_table_start");
@@ -2080,60 +2111,65 @@ void DwarfDebug::emitDebugRnglists() {
   Asm->EmitLabelDifference(TableEnd, TableStart, 4);
   Asm->OutStreamer->EmitLabel(TableStart);
   // Version number (DWARF v5 and later).
-  Asm->emitInt16(getDwarfVersion());
+  Asm->emitInt16(Asm->OutStreamer->getContext().getDwarfVersion());
   // Address size.
   Asm->emitInt8(Asm->MAI->getCodePointerSize());
   // Segment selector size.
   Asm->emitInt8(0);
 
-  MCSymbol *RnglistTableBaseSym =
-      (useSplitDwarf() ? SkeletonHolder : InfoHolder).getRnglistsTableBaseSym();
+  MCSymbol *RnglistTableBaseSym = Holder.getRnglistsTableBaseSym();
 
   // FIXME: Generate the offsets table and use DW_FORM_rnglistx with the
   // DW_AT_ranges attribute. Until then set the number of offsets to 0.
   Asm->emitInt32(0);
   Asm->OutStreamer->EmitLabel(RnglistTableBaseSym);
-
-  // Emit the individual range lists.
-  for (const auto &I : CUMap) {
-    DwarfCompileUnit *TheCU = I.second;
-    if (auto *Skel = TheCU->getSkeleton())
-      TheCU = Skel;
-    for (const RangeSpanList &List : TheCU->getRangeLists())
-      emitRangeList(Asm, TheCU, List);
-  }
-
-  Asm->OutStreamer->EmitLabel(TableEnd);
+  return TableEnd;
 }
 
-/// Emit address ranges into the .debug_ranges section or DWARF v5 rangelists
-/// into the .debug_rnglists section.
+/// Emit address ranges into the .debug_ranges section or into the DWARF v5
+/// .debug_rnglists section.
 void DwarfDebug::emitDebugRanges() {
   if (CUMap.empty())
     return;
 
-  if (!useRangesSection()) {
-    assert(llvm::all_of(
-               CUMap,
-               [](const decltype(CUMap)::const_iterator::value_type &Pair) {
-                 return Pair.second->getRangeLists().empty();
-               }) &&
-           "No debug ranges expected.");
+  auto NoRangesPresent = [this]() {
+    return llvm::all_of(
+        CUMap, [](const decltype(CUMap)::const_iterator::value_type &Pair) {
+          return Pair.second->getRangeLists().empty();
+        });
+  };
+
+  if (llvm::all_of(CUMap, [](const decltype(CUMap)::value_type &Pair) {
+        return Pair.second->getCUNode()->isDebugDirectivesOnly();
+      })) {
+    assert(NoRangesPresent() && "No debug ranges expected.");
     return;
   }
 
-  if (getDwarfVersion() >= 5) {
-    emitDebugRnglists();
+  if (!useRangesSection()) {
+    assert(NoRangesPresent() && "No debug ranges expected.");
     return;
   }
+
+  if (NoRangesPresent())
+    return;
 
   // Start the dwarf ranges section.
-  Asm->OutStreamer->SwitchSection(
-      Asm->getObjFileLowering().getDwarfRangesSection());
+  MCSymbol *TableEnd = nullptr;
+  if (getDwarfVersion() >= 5) {
+    Asm->OutStreamer->SwitchSection(
+        Asm->getObjFileLowering().getDwarfRnglistsSection());
+    TableEnd = emitRnglistsTableHeader(Asm, useSplitDwarf() ? SkeletonHolder
+                                                            : InfoHolder);
+  } else
+    Asm->OutStreamer->SwitchSection(
+        Asm->getObjFileLowering().getDwarfRangesSection());
 
   // Grab the specific ranges for the compile units in the module.
   for (const auto &I : CUMap) {
     DwarfCompileUnit *TheCU = I.second;
+    if (TheCU->getCUNode()->isDebugDirectivesOnly())
+      continue;
 
     if (auto *Skel = TheCU->getSkeleton())
       TheCU = Skel;
@@ -2142,6 +2178,9 @@ void DwarfDebug::emitDebugRanges() {
     for (const RangeSpanList &List : TheCU->getRangeLists())
       emitRangeList(Asm, TheCU, List);
   }
+
+  if (TableEnd)
+    Asm->OutStreamer->EmitLabel(TableEnd);
 }
 
 void DwarfDebug::handleMacroNodes(DIMacroNodeArray Nodes, DwarfCompileUnit &U) {
@@ -2183,12 +2222,19 @@ void DwarfDebug::emitDebugMacinfo() {
   if (CUMap.empty())
     return;
 
+  if (llvm::all_of(CUMap, [](const decltype(CUMap)::value_type &Pair) {
+        return Pair.second->getCUNode()->isDebugDirectivesOnly();
+      }))
+    return;
+
   // Start the dwarf macinfo section.
   Asm->OutStreamer->SwitchSection(
       Asm->getObjFileLowering().getDwarfMacinfoSection());
 
   for (const auto &P : CUMap) {
     auto &TheCU = *P.second;
+    if (TheCU.getCUNode()->isDebugDirectivesOnly())
+      continue;
     auto *SkCU = TheCU.getSkeleton();
     DwarfCompileUnit &U = SkCU ? *SkCU : TheCU;
     auto *CUNode = cast<DICompileUnit>(P.first);
@@ -2217,9 +2263,6 @@ void DwarfDebug::initSkeletonUnit(const DwarfUnit &U, DIE &Die,
   SkeletonHolder.addUnit(std::move(NewU));
 }
 
-// This DIE has the following attributes: DW_AT_comp_dir, DW_AT_stmt_list,
-// DW_AT_low_pc, DW_AT_high_pc, DW_AT_ranges, DW_AT_dwo_name, DW_AT_dwo_id,
-// DW_AT_addr_base, DW_AT_ranges_base or DW_AT_rnglists_base.
 DwarfCompileUnit &DwarfDebug::constructSkeletonCU(const DwarfCompileUnit &CU) {
 
   auto OwnedUnit = llvm::make_unique<DwarfCompileUnit>(
@@ -2261,8 +2304,9 @@ void DwarfDebug::emitDebugLineDWO() {
 
 void DwarfDebug::emitStringOffsetsTableHeaderDWO() {
   assert(useSplitDwarf() && "No split dwarf?");
-  InfoHolder.emitStringOffsetsTableHeader(
-      Asm->getObjFileLowering().getDwarfStrOffDWOSection());
+  InfoHolder.getStringPool().emitStringOffsetsTableHeader(
+      *Asm, Asm->getObjFileLowering().getDwarfStrOffDWOSection(),
+      InfoHolder.getStringOffsetsStartSym());
 }
 
 // Emit the .debug_str.dwo section for separated dwarf. This contains the
@@ -2275,6 +2319,12 @@ void DwarfDebug::emitDebugStrDWO() {
   MCSection *OffSec = Asm->getObjFileLowering().getDwarfStrOffDWOSection();
   InfoHolder.emitStrings(Asm->getObjFileLowering().getDwarfStrDWOSection(),
                          OffSec, /* UseRelativeOffsets = */ false);
+}
+
+// Emit DWO addresses.
+void DwarfDebug::emitDebugAddr() {
+  assert(useSplitDwarf() && "No split dwarf?");
+  AddrPool.emit(*Asm, Asm->getObjFileLowering().getDwarfAddrSection());
 }
 
 MCDwarfDwoLineTable *DwarfDebug::getDwoLineTable(const DwarfCompileUnit &CU) {
@@ -2376,67 +2426,49 @@ void DwarfDebug::addDwarfTypeUnitType(DwarfCompileUnit &CU,
   CU.addDIETypeSignature(RefDie, Signature);
 }
 
-void DwarfDebug::addAccelDebugName(StringRef Name, const DIE &Die) {
-  assert(getAccelTableKind() == AccelTableKind::Dwarf);
+// Add the Name along with its companion DIE to the appropriate accelerator
+// table (for AccelTableKind::Dwarf it's always AccelDebugNames, for
+// AccelTableKind::Apple, we use the table we got as an argument). If
+// accelerator tables are disabled, this function does nothing.
+template <typename DataT>
+void DwarfDebug::addAccelNameImpl(AccelTable<DataT> &AppleAccel, StringRef Name,
+                                  const DIE &Die) {
+  if (getAccelTableKind() == AccelTableKind::None)
+    return;
 
   DwarfFile &Holder = useSplitDwarf() ? SkeletonHolder : InfoHolder;
-  AccelDebugNames.addName(Holder.getStringPool().getEntry(*Asm, Name), Die);
-}
+  DwarfStringPoolEntryRef Ref = Holder.getStringPool().getEntry(*Asm, Name);
 
-// Accelerator table mutators - add each name along with its companion
-// DIE to the proper table while ensuring that the name that we're going
-// to reference is in the string table. We do this since the names we
-// add may not only be identical to the names in the DIE.
-void DwarfDebug::addAccelName(StringRef Name, const DIE &Die) {
   switch (getAccelTableKind()) {
   case AccelTableKind::Apple:
-    AccelNames.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+    AppleAccel.addName(Ref, Die);
     break;
   case AccelTableKind::Dwarf:
-    addAccelDebugName(Name, Die);
+    AccelDebugNames.addName(Ref, Die);
     break;
-  case AccelTableKind::None:
-    return;
   case AccelTableKind::Default:
     llvm_unreachable("Default should have already been resolved.");
+  case AccelTableKind::None:
+    llvm_unreachable("None handled above");
   }
+}
+
+void DwarfDebug::addAccelName(StringRef Name, const DIE &Die) {
+  addAccelNameImpl(AccelNames, Name, Die);
 }
 
 void DwarfDebug::addAccelObjC(StringRef Name, const DIE &Die) {
-  if (getAccelTableKind() != AccelTableKind::Apple)
-    return;
-  AccelObjC.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+  // ObjC names go only into the Apple accelerator tables.
+  if (getAccelTableKind() == AccelTableKind::Apple)
+    addAccelNameImpl(AccelObjC, Name, Die);
 }
 
 void DwarfDebug::addAccelNamespace(StringRef Name, const DIE &Die) {
-  switch (getAccelTableKind()) {
-  case AccelTableKind::Apple:
-    AccelNamespace.addName(InfoHolder.getStringPool().getEntry(*Asm, Name),
-                           &Die);
-    break;
-  case AccelTableKind::Dwarf:
-    addAccelDebugName(Name, Die);
-    break;
-  case AccelTableKind::None:
-    return;
-  case AccelTableKind::Default:
-    llvm_unreachable("Default should have already been resolved.");
-  }
+  addAccelNameImpl(AccelNamespace, Name, Die);
 }
 
 void DwarfDebug::addAccelType(StringRef Name, const DIE &Die, char Flags) {
-  switch (getAccelTableKind()) {
-  case AccelTableKind::Apple:
-    AccelTypes.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
-    break;
-  case AccelTableKind::Dwarf:
-    addAccelDebugName(Name, Die);
-    break;
-  case AccelTableKind::None:
-    return;
-  case AccelTableKind::Default:
-    llvm_unreachable("Default should have already been resolved.");
-  }
+  addAccelNameImpl(AccelTypes, Name, Die);
 }
 
 uint16_t DwarfDebug::getDwarfVersion() const {

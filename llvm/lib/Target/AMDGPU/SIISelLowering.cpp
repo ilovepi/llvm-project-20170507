@@ -232,6 +232,10 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ADDCARRY, MVT::i32, Legal);
   setOperationAction(ISD::SUBCARRY, MVT::i32, Legal);
 
+  setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
+  setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
+  setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
+
 #if 0
   setOperationAction(ISD::ADDCARRY, MVT::i64, Legal);
   setOperationAction(ISD::SUBCARRY, MVT::i64, Legal);
@@ -589,6 +593,7 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FMUL, MVT::v4f16, Custom);
     setOperationAction(ISD::FMINNUM, MVT::v4f16, Custom);
     setOperationAction(ISD::FMAXNUM, MVT::v4f16, Custom);
+    setOperationAction(ISD::FCANONICALIZE, MVT::v4f16, Custom);
 
     setOperationAction(ISD::SELECT, MVT::v4i16, Custom);
     setOperationAction(ISD::SELECT, MVT::v4f16, Custom);
@@ -692,6 +697,87 @@ bool SITargetLowering::isShuffleMaskLegal(ArrayRef<int>, EVT) const {
   // SI has some legal vector types, but no legal vector operations. Say no
   // shuffles are legal in order to prefer scalarizing some vector operations.
   return false;
+}
+
+MVT SITargetLowering::getRegisterTypeForCallingConv(LLVMContext &Context,
+                                                    CallingConv::ID CC,
+                                                    EVT VT) const {
+  // TODO: Consider splitting all arguments into 32-bit pieces.
+  if (CC != CallingConv::AMDGPU_KERNEL && VT.isVector()) {
+    EVT ScalarVT = VT.getScalarType();
+    unsigned Size = ScalarVT.getSizeInBits();
+    if (Size == 32)
+      return ScalarVT.getSimpleVT();
+
+    if (Size == 64)
+      return MVT::i32;
+
+    if (Size == 16 &&
+        Subtarget->has16BitInsts() &&
+        isPowerOf2_32(VT.getVectorNumElements()))
+      return VT.isInteger() ? MVT::v2i16 : MVT::v2f16;
+  }
+
+  return TargetLowering::getRegisterTypeForCallingConv(Context, CC, VT);
+}
+
+unsigned SITargetLowering::getNumRegistersForCallingConv(LLVMContext &Context,
+                                                         CallingConv::ID CC,
+                                                         EVT VT) const {
+  if (CC != CallingConv::AMDGPU_KERNEL && VT.isVector()) {
+    unsigned NumElts = VT.getVectorNumElements();
+    EVT ScalarVT = VT.getScalarType();
+    unsigned Size = ScalarVT.getSizeInBits();
+
+    if (Size == 32)
+      return NumElts;
+
+    if (Size == 64)
+      return 2 * NumElts;
+
+    // FIXME: Fails to break down as we want with v3.
+    if (Size == 16 && Subtarget->has16BitInsts() && isPowerOf2_32(NumElts))
+      return VT.getVectorNumElements() / 2;
+  }
+
+  return TargetLowering::getNumRegistersForCallingConv(Context, CC, VT);
+}
+
+unsigned SITargetLowering::getVectorTypeBreakdownForCallingConv(
+  LLVMContext &Context, CallingConv::ID CC,
+  EVT VT, EVT &IntermediateVT,
+  unsigned &NumIntermediates, MVT &RegisterVT) const {
+  if (CC != CallingConv::AMDGPU_KERNEL && VT.isVector()) {
+    unsigned NumElts = VT.getVectorNumElements();
+    EVT ScalarVT = VT.getScalarType();
+    unsigned Size = ScalarVT.getSizeInBits();
+    if (Size == 32) {
+      RegisterVT = ScalarVT.getSimpleVT();
+      IntermediateVT = RegisterVT;
+      NumIntermediates = NumElts;
+      return NumIntermediates;
+    }
+
+    if (Size == 64) {
+      RegisterVT = MVT::i32;
+      IntermediateVT = RegisterVT;
+      NumIntermediates = 2 * NumElts;
+      return NumIntermediates;
+    }
+
+    // FIXME: We should fix the ABI to be the same on targets without 16-bit
+    // support, but unless we can properly handle 3-vectors, it will be still be
+    // inconsistent.
+    if (Size == 16 && Subtarget->has16BitInsts() && isPowerOf2_32(NumElts)) {
+      RegisterVT = VT.isInteger() ? MVT::v2i16 : MVT::v2f16;
+      IntermediateVT = RegisterVT;
+      NumIntermediates = NumElts / 2;
+      return NumIntermediates;
+    }
+  }
+
+  return TargetLowering::getVectorTypeBreakdownForCallingConv(
+    Context, CC, VT, IntermediateVT, NumIntermediates, RegisterVT);
 }
 
 bool SITargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
@@ -1165,8 +1251,8 @@ SDValue SITargetLowering::lowerKernargMemParameter(
   // Try to avoid using an extload by loading earlier than the argument address,
   // and extracting the relevant bits. The load should hopefully be merged with
   // the previous argument.
-  if (Align < 4) {
-    assert(MemVT.getStoreSize() < 4);
+  if (MemVT.getStoreSize() < 4 && Align < 4) {
+    // TODO: Handle align < 4 and size >= 4 (can happen with packed structs).
     int64_t AlignDownOffset = alignDown(Offset, 4);
     int64_t OffsetDiff = Offset - AlignDownOffset;
 
@@ -1268,6 +1354,9 @@ static void processShaderInputArgs(SmallVectorImpl<ISD::InputArg> &Splits,
   for (unsigned I = 0, E = Ins.size(), PSInputNum = 0; I != E; ++I) {
     const ISD::InputArg *Arg = &Ins[I];
 
+    assert((!Arg->VT.isVector() || Arg->VT.getScalarSizeInBits() == 16) &&
+           "vector type argument should have been split");
+
     // First check if it's a PS input addr.
     if (CallConv == CallingConv::AMDGPU_PS &&
         !Arg->Flags.isInReg() && !Arg->Flags.isByVal() && PSInputNum <= 15) {
@@ -1301,25 +1390,7 @@ static void processShaderInputArgs(SmallVectorImpl<ISD::InputArg> &Splits,
       ++PSInputNum;
     }
 
-    // Second split vertices into their elements.
-    if (Arg->VT.isVector()) {
-      ISD::InputArg NewArg = *Arg;
-      NewArg.Flags.setSplit();
-      NewArg.VT = Arg->VT.getVectorElementType();
-
-      // We REALLY want the ORIGINAL number of vertex elements here, e.g. a
-      // three or five element vertex only needs three or five registers,
-      // NOT four or eight.
-      Type *ParamType = FType->getParamType(Arg->getOrigArgIndex());
-      unsigned NumElements = ParamType->getVectorNumElements();
-
-      for (unsigned J = 0; J != NumElements; ++J) {
-        Splits.push_back(NewArg);
-        NewArg.PartOffset += NewArg.VT.getStoreSize();
-      }
-    } else {
-      Splits.push_back(*Arg);
-    }
+    Splits.push_back(*Arg);
   }
 }
 
@@ -1797,7 +1868,6 @@ SDValue SITargetLowering::LowerFormalArguments(
   // FIXME: Alignment of explicit arguments totally broken with non-0 explicit
   // kern arg offset.
   const unsigned KernelArgBaseAlign = 16;
-  const unsigned ExplicitOffset = Subtarget->getExplicitKernelArgOffset(Fn);
 
    for (unsigned i = 0, e = Ins.size(), ArgIdx = 0; i != e; ++i) {
     const ISD::InputArg &Arg = Ins[i];
@@ -1813,11 +1883,9 @@ SDValue SITargetLowering::LowerFormalArguments(
       VT = Ins[i].VT;
       EVT MemVT = VA.getLocVT();
 
-      const uint64_t Offset = ExplicitOffset + VA.getLocMemOffset();
+      const uint64_t Offset = VA.getLocMemOffset();
       unsigned Align = MinAlign(KernelArgBaseAlign, Offset);
 
-      // The first 36 bytes of the input buffer contains information about
-      // thread group and global sizes for clover.
       SDValue Arg = lowerKernargMemParameter(
         DAG, VT, MemVT, DL, Chain, Offset, Align, Ins[i].Flags.isSExt(), &Ins[i]);
       Chains.push_back(Arg.getValue(1));
@@ -1889,29 +1957,6 @@ SDValue SITargetLowering::LowerFormalArguments(
       llvm_unreachable("Unknown loc info!");
     }
 
-    if (IsShader && Arg.VT.isVector()) {
-      // Build a vector from the registers
-      Type *ParamType = FType->getParamType(Arg.getOrigArgIndex());
-      unsigned NumElements = ParamType->getVectorNumElements();
-
-      SmallVector<SDValue, 4> Regs;
-      Regs.push_back(Val);
-      for (unsigned j = 1; j != NumElements; ++j) {
-        Reg = ArgLocs[ArgIdx++].getLocReg();
-        Reg = MF.addLiveIn(Reg, RC);
-
-        SDValue Copy = DAG.getCopyFromReg(Chain, DL, Reg, VT);
-        Regs.push_back(Copy);
-      }
-
-      // Fill up the missing vector elements
-      NumElements = Arg.VT.getVectorNumElements() - NumElements;
-      Regs.append(NumElements, DAG.getUNDEF(VT));
-
-      InVals.push_back(DAG.getBuildVector(Arg.VT, DL, Regs));
-      continue;
-    }
-
     InVals.push_back(Val);
   }
 
@@ -1975,48 +2020,19 @@ SITargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   bool IsShader = AMDGPU::isShader(CallConv);
 
-  Info->setIfReturnsVoid(Outs.size() == 0);
+  Info->setIfReturnsVoid(Outs.empty());
   bool IsWaveEnd = Info->returnsVoid() && IsShader;
-
-  SmallVector<ISD::OutputArg, 48> Splits;
-  SmallVector<SDValue, 48> SplitVals;
-
-  // Split vectors into their elements.
-  for (unsigned i = 0, e = Outs.size(); i != e; ++i) {
-    const ISD::OutputArg &Out = Outs[i];
-
-    if (IsShader && Out.VT.isVector()) {
-      MVT VT = Out.VT.getVectorElementType();
-      ISD::OutputArg NewOut = Out;
-      NewOut.Flags.setSplit();
-      NewOut.VT = VT;
-
-      // We want the original number of vector elements here, e.g.
-      // three or five, not four or eight.
-      unsigned NumElements = Out.ArgVT.getVectorNumElements();
-
-      for (unsigned j = 0; j != NumElements; ++j) {
-        SDValue Elem = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, VT, OutVals[i],
-                                   DAG.getConstant(j, DL, MVT::i32));
-        SplitVals.push_back(Elem);
-        Splits.push_back(NewOut);
-        NewOut.PartOffset += NewOut.VT.getStoreSize();
-      }
-    } else {
-      SplitVals.push_back(OutVals[i]);
-      Splits.push_back(Out);
-    }
-  }
 
   // CCValAssign - represent the assignment of the return value to a location.
   SmallVector<CCValAssign, 48> RVLocs;
+  SmallVector<ISD::OutputArg, 48> Splits;
 
   // CCState - Info about the registers and stack slots.
   CCState CCInfo(CallConv, isVarArg, DAG.getMachineFunction(), RVLocs,
                  *DAG.getContext());
 
   // Analyze outgoing return values.
-  CCInfo.AnalyzeReturn(Splits, CCAssignFnForReturn(CallConv, isVarArg));
+  CCInfo.AnalyzeReturn(Outs, CCAssignFnForReturn(CallConv, isVarArg));
 
   SDValue Flag;
   SmallVector<SDValue, 48> RetOps;
@@ -2041,14 +2057,12 @@ SITargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   }
 
   // Copy the result values into the output registers.
-  for (unsigned i = 0, realRVLocIdx = 0;
-       i != RVLocs.size();
-       ++i, ++realRVLocIdx) {
-    CCValAssign &VA = RVLocs[i];
+  for (unsigned I = 0, RealRVLocIdx = 0, E = RVLocs.size(); I != E;
+       ++I, ++RealRVLocIdx) {
+    CCValAssign &VA = RVLocs[I];
     assert(VA.isRegLoc() && "Can only return in registers!");
     // TODO: Partially return in registers if return values don't fit.
-
-    SDValue Arg = SplitVals[realRVLocIdx];
+    SDValue Arg = OutVals[RealRVLocIdx];
 
     // Copied from other backends.
     switch (VA.getLocInfo()) {
@@ -2361,6 +2375,9 @@ SDValue SITargetLowering::LowerCall(CallLoweringInfo &CLI,
     return lowerUnhandledCall(CLI, InVals,
                               "unsupported call to variadic function ");
   }
+
+  if (!CLI.CS.getInstruction())
+    report_fatal_error("unsupported libcall legalization");
 
   if (!CLI.CS.getCalledFunction()) {
     return lowerUnhandledCall(CLI, InVals,
@@ -3566,6 +3583,7 @@ SDValue SITargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     return lowerDEBUGTRAP(Op, DAG);
   case ISD::FABS:
   case ISD::FNEG:
+  case ISD::FCANONICALIZE:
     return splitUnaryVectorOp(Op, DAG);
   case ISD::SHL:
   case ISD::SRA:
@@ -3616,18 +3634,9 @@ static SDValue adjustLoadValueTypeImpl(SDValue Result, EVT LoadVT,
 SDValue SITargetLowering::adjustLoadValueType(unsigned Opcode,
                                               MemSDNode *M,
                                               SelectionDAG &DAG,
+                                              ArrayRef<SDValue> Ops,
                                               bool IsIntrinsic) const {
   SDLoc DL(M);
-  SmallVector<SDValue, 10> Ops;
-  Ops.reserve(M->getNumOperands());
-
-  Ops.push_back(M->getOperand(0));
-  if (IsIntrinsic)
-    Ops.push_back(DAG.getConstant(Opcode, DL, MVT::i32));
-
-  // Skip 1, as it is the intrinsic ID.
-  for (unsigned I = 2, E = M->getNumOperands(); I != E; ++I)
-    Ops.push_back(M->getOperand(I));
 
   bool Unpacked = Subtarget->hasUnpackedD16VMem();
   EVT LoadVT = M->getValueType(0);
@@ -3699,8 +3708,13 @@ void SITargetLowering::ReplaceNodeResults(SDNode *N,
       else
         Opcode = AMDGPUISD::CVT_PK_U16_U32;
 
-      SDValue Cvt = DAG.getNode(Opcode, SL, MVT::i32, Src0, Src1);
-      Results.push_back(DAG.getNode(ISD::BITCAST, SL, MVT::v2i16, Cvt));
+      EVT VT = N->getValueType(0);
+      if (isTypeLegal(VT))
+        Results.push_back(DAG.getNode(Opcode, SL, VT, Src0, Src1));
+      else {
+        SDValue Cvt = DAG.getNode(Opcode, SL, MVT::i32, Src0, Src1);
+        Results.push_back(DAG.getNode(ISD::BITCAST, SL, MVT::v2i16, Cvt));
+      }
       return;
     }
     }
@@ -4493,6 +4507,9 @@ SDValue SITargetLowering::lowerImage(SDValue Op,
   const AMDGPU::MIMGBaseOpcodeInfo *BaseOpcode =
       AMDGPU::getMIMGBaseOpcodeInfo(Intr->BaseOpcode);
   const AMDGPU::MIMGDimInfo *DimInfo = AMDGPU::getMIMGDimInfo(Intr->Dim);
+  const AMDGPU::MIMGLZMappingInfo *LZMappingInfo =
+      AMDGPU::getMIMGLZMappingInfo(Intr->BaseOpcode);
+  unsigned IntrOpcode = Intr->BaseOpcode;
 
   SmallVector<EVT, 2> ResultTypes(Op->value_begin(), Op->value_end());
   bool IsD16 = false;
@@ -4578,6 +4595,18 @@ SDValue SITargetLowering::lowerImage(SDValue Op,
   SmallVector<SDValue, 4> VAddrs;
   for (unsigned i = 0; i < NumVAddrs; ++i)
     VAddrs.push_back(Op.getOperand(AddrIdx + i));
+
+  // Optimize _L to _LZ when _L is zero
+  if (LZMappingInfo) {
+    if (auto ConstantLod =
+         dyn_cast<ConstantFPSDNode>(VAddrs[NumVAddrs-1].getNode())) {
+      if (ConstantLod->isZero() || ConstantLod->isNegative()) {
+        IntrOpcode = LZMappingInfo->LZ;  // set new opcode to _lz variant of _l
+        VAddrs.pop_back();               // remove 'lod'
+      }
+    }
+  }
+
   SDValue VAddr = getBuildDwordsVector(DAG, DL, VAddrs);
 
   SDValue True = DAG.getTargetConstant(1, DL, MVT::i1);
@@ -4637,10 +4666,10 @@ SDValue SITargetLowering::lowerImage(SDValue Op,
   int Opcode = -1;
 
   if (Subtarget->getGeneration() >= AMDGPUSubtarget::VOLCANIC_ISLANDS)
-    Opcode = AMDGPU::getMIMGOpcode(Intr->BaseOpcode, AMDGPU::MIMGEncGfx8,
+    Opcode = AMDGPU::getMIMGOpcode(IntrOpcode, AMDGPU::MIMGEncGfx8,
                                    NumVDataDwords, NumVAddrDwords);
   if (Opcode == -1)
-    Opcode = AMDGPU::getMIMGOpcode(Intr->BaseOpcode, AMDGPU::MIMGEncGfx6,
+    Opcode = AMDGPU::getMIMGOpcode(IntrOpcode, AMDGPU::MIMGEncGfx6,
                                    NumVDataDwords, NumVAddrDwords);
   assert(Opcode != -1);
 
@@ -4948,7 +4977,8 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
                        Op.getOperand(1), Op.getOperand(2), Op.getOperand(3));
   case Intrinsic::amdgcn_fdot2:
     return DAG.getNode(AMDGPUISD::FDOT2, DL, VT,
-                       Op.getOperand(1), Op.getOperand(2), Op.getOperand(3));
+                       Op.getOperand(1), Op.getOperand(2), Op.getOperand(3),
+                       Op.getOperand(4));
   case Intrinsic::amdgcn_fmul_legacy:
     return DAG.getNode(AMDGPUISD::FMUL_LEGACY, DL, VT,
                        Op.getOperand(1), Op.getOperand(2));
@@ -4979,6 +5009,9 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
       Opcode = AMDGPUISD::CVT_PK_I16_I32;
     else
       Opcode = AMDGPUISD::CVT_PK_U16_U32;
+
+    if (isTypeLegal(VT))
+      return DAG.getNode(Opcode, DL, VT, Op.getOperand(1), Op.getOperand(2));
 
     SDValue Node = DAG.getNode(Opcode, DL, MVT::i32,
                                Op.getOperand(1), Op.getOperand(2));
@@ -5064,20 +5097,16 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
     EVT IntVT = VT.changeTypeToInteger();
     auto *M = cast<MemSDNode>(Op);
     EVT LoadVT = Op.getValueType();
-    bool IsD16 = LoadVT.getScalarType() == MVT::f16;
-    if (IsD16)
-      return adjustLoadValueType(AMDGPUISD::BUFFER_LOAD_FORMAT_D16, M, DAG);
 
+    if (LoadVT.getScalarType() == MVT::f16)
+      return adjustLoadValueType(AMDGPUISD::BUFFER_LOAD_FORMAT_D16,
+                                 M, DAG, Ops);
     return DAG.getMemIntrinsicNode(Opc, DL, Op->getVTList(), Ops, IntVT,
                                    M->getMemOperand());
   }
   case Intrinsic::amdgcn_tbuffer_load: {
     MemSDNode *M = cast<MemSDNode>(Op);
     EVT LoadVT = Op.getValueType();
-    bool IsD16 = LoadVT.getScalarType() == MVT::f16;
-    if (IsD16) {
-      return adjustLoadValueType(AMDGPUISD::TBUFFER_LOAD_FORMAT_D16, M, DAG);
-    }
 
     SDValue Ops[] = {
       Op.getOperand(0),  // Chain
@@ -5092,6 +5121,9 @@ SDValue SITargetLowering::LowerINTRINSIC_W_CHAIN(SDValue Op,
       Op.getOperand(10)   // slc
     };
 
+    if (LoadVT.getScalarType() == MVT::f16)
+      return adjustLoadValueType(AMDGPUISD::TBUFFER_LOAD_FORMAT_D16,
+                                 M, DAG, Ops);
     return DAG.getMemIntrinsicNode(AMDGPUISD::TBUFFER_LOAD_FORMAT, DL,
                                    Op->getVTList(), Ops, LoadVT,
                                    M->getMemOperand());
@@ -6720,132 +6752,159 @@ SDValue SITargetLowering::performRcpCombine(SDNode *N,
   return AMDGPUTargetLowering::performRcpCombine(N, DCI);
 }
 
-static bool isKnownNeverSNan(SelectionDAG &DAG, SDValue Op) {
-  if (!DAG.getTargetLoweringInfo().hasFloatingPointExceptions())
+bool SITargetLowering::isCanonicalized(SelectionDAG &DAG, SDValue Op,
+                                       unsigned MaxDepth) const {
+  unsigned Opcode = Op.getOpcode();
+  if (Opcode == ISD::FCANONICALIZE)
     return true;
 
-  return DAG.isKnownNeverNaN(Op);
-}
+  if (auto *CFP = dyn_cast<ConstantFPSDNode>(Op)) {
+    auto F = CFP->getValueAPF();
+    if (F.isNaN() && F.isSignaling())
+      return false;
+    return !F.isDenormal() || denormalsEnabledForType(Op.getValueType());
+  }
 
-static bool isCanonicalized(SelectionDAG &DAG, SDValue Op,
-                            const GCNSubtarget *ST, unsigned MaxDepth=5) {
   // If source is a result of another standard FP operation it is already in
   // canonical form.
+  if (MaxDepth == 0)
+    return false;
 
-  switch (Op.getOpcode()) {
-  default:
-    break;
-
+  switch (Opcode) {
   // These will flush denorms if required.
   case ISD::FADD:
   case ISD::FSUB:
   case ISD::FMUL:
-  case ISD::FSQRT:
   case ISD::FCEIL:
   case ISD::FFLOOR:
   case ISD::FMA:
   case ISD::FMAD:
-
-  case ISD::FCANONICALIZE:
-    return true;
-
+  case ISD::FSQRT:
+  case ISD::FDIV:
+  case ISD::FREM:
   case ISD::FP_ROUND:
-    return Op.getValueType().getScalarType() != MVT::f16 ||
-           ST->hasFP16Denormals();
-
   case ISD::FP_EXTEND:
-    return Op.getOperand(0).getValueType().getScalarType() != MVT::f16 ||
-           ST->hasFP16Denormals();
-
-  case ISD::FP16_TO_FP:
-  case ISD::FP_TO_FP16:
-    return ST->hasFP16Denormals();
+  case AMDGPUISD::FMUL_LEGACY:
+  case AMDGPUISD::FMAD_FTZ:
+  case AMDGPUISD::RCP:
+  case AMDGPUISD::RSQ:
+  case AMDGPUISD::RSQ_CLAMP:
+  case AMDGPUISD::RCP_LEGACY:
+  case AMDGPUISD::RSQ_LEGACY:
+  case AMDGPUISD::RCP_IFLAG:
+  case AMDGPUISD::TRIG_PREOP:
+  case AMDGPUISD::DIV_SCALE:
+  case AMDGPUISD::DIV_FMAS:
+  case AMDGPUISD::DIV_FIXUP:
+  case AMDGPUISD::FRACT:
+  case AMDGPUISD::LDEXP:
+  case AMDGPUISD::CVT_PKRTZ_F16_F32:
+    return true;
 
   // It can/will be lowered or combined as a bit operation.
   // Need to check their input recursively to handle.
   case ISD::FNEG:
   case ISD::FABS:
-    return (MaxDepth > 0) &&
-           isCanonicalized(DAG, Op.getOperand(0), ST, MaxDepth - 1);
+  case ISD::FCOPYSIGN:
+    return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1);
 
   case ISD::FSIN:
   case ISD::FCOS:
   case ISD::FSINCOS:
     return Op.getValueType().getScalarType() != MVT::f16;
 
-  // In pre-GFX9 targets V_MIN_F32 and others do not flush denorms.
-  // For such targets need to check their input recursively.
   case ISD::FMINNUM:
   case ISD::FMAXNUM:
-  case ISD::FMINNAN:
-  case ISD::FMAXNAN:
+  case AMDGPUISD::CLAMP:
+  case AMDGPUISD::FMED3:
+  case AMDGPUISD::FMAX3:
+  case AMDGPUISD::FMIN3: {
+    // FIXME: Shouldn't treat the generic operations different based these.
+    bool IsIEEEMode = Subtarget->enableIEEEBit(DAG.getMachineFunction());
+    if (IsIEEEMode) {
+      // snans will be quieted, so we only need to worry about denormals.
+      if (Subtarget->supportsMinMaxDenormModes() ||
+          denormalsEnabledForType(Op.getValueType()))
+        return true;
 
-    if (ST->supportsMinMaxDenormModes() &&
-        DAG.isKnownNeverNaN(Op.getOperand(0)) &&
-        DAG.isKnownNeverNaN(Op.getOperand(1)))
+      // Flushing may be required.
+      // In pre-GFX9 targets V_MIN_F32 and others do not flush denorms. For such
+      // targets need to check their input recursively.
+      return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1) &&
+             isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1);
+    }
+
+    if (Subtarget->supportsMinMaxDenormModes() ||
+        denormalsEnabledForType(Op.getValueType())) {
+      // Only quieting may be necessary.
+      return DAG.isKnownNeverSNaN(Op.getOperand(0)) &&
+             DAG.isKnownNeverSNaN(Op.getOperand(1));
+    }
+
+    // Flushing and quieting may be necessary
+    // With ieee_mode off, the nan is returned as-is, so if it is an sNaN it
+    // needs to be quieted.
+    return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1) &&
+           isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1);
+  }
+  case ISD::SELECT: {
+    return isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1) &&
+           isCanonicalized(DAG, Op.getOperand(2), MaxDepth - 1);
+  }
+  case ISD::BUILD_VECTOR: {
+    for (unsigned i = 0, e = Op.getNumOperands(); i != e; ++i) {
+      SDValue SrcOp = Op.getOperand(i);
+      if (!isCanonicalized(DAG, SrcOp, MaxDepth - 1))
+        return false;
+    }
+
+    return true;
+  }
+  case ISD::EXTRACT_VECTOR_ELT:
+  case ISD::EXTRACT_SUBVECTOR: {
+    return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1);
+  }
+  case ISD::INSERT_VECTOR_ELT: {
+    return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1) &&
+           isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1);
+  }
+  case ISD::UNDEF:
+    // Could be anything.
+    return false;
+
+  case ISD::INTRINSIC_WO_CHAIN: {
+    unsigned IntrinsicID
+      = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
+    // TODO: Handle more intrinsics
+    switch (IntrinsicID) {
+    case Intrinsic::amdgcn_cvt_pkrtz:
       return true;
-
-    return (MaxDepth > 0) &&
-           isCanonicalized(DAG, Op.getOperand(0), ST, MaxDepth - 1) &&
-           isCanonicalized(DAG, Op.getOperand(1), ST, MaxDepth - 1);
-
-  case ISD::ConstantFP: {
-    auto F = cast<ConstantFPSDNode>(Op)->getValueAPF();
-    return !F.isDenormal() && !(F.isNaN() && F.isSignaling());
+    default:
+      break;
+    }
   }
+  default:
+    return denormalsEnabledForType(Op.getValueType()) &&
+           DAG.isKnownNeverSNaN(Op);
   }
-  return false;
+
+  llvm_unreachable("invalid operation");
 }
 
 // Constant fold canonicalize.
-SDValue SITargetLowering::performFCanonicalizeCombine(
-  SDNode *N,
-  DAGCombinerInfo &DCI) const {
-  SelectionDAG &DAG = DCI.DAG;
-  ConstantFPSDNode *CFP = isConstOrConstSplatFP(N->getOperand(0));
 
-  if (!CFP) {
-    SDValue N0 = N->getOperand(0);
-    EVT VT = N0.getValueType().getScalarType();
-    auto ST = getSubtarget();
-
-    if (((VT == MVT::f32 && ST->hasFP32Denormals()) ||
-         (VT == MVT::f64 && ST->hasFP64Denormals()) ||
-         (VT == MVT::f16 && ST->hasFP16Denormals())) &&
-        DAG.isKnownNeverNaN(N0))
-      return N0;
-
-    bool IsIEEEMode = Subtarget->enableIEEEBit(DAG.getMachineFunction());
-
-    if ((IsIEEEMode || isKnownNeverSNan(DAG, N0)) &&
-        isCanonicalized(DAG, N0, ST))
-      return N0;
-
-    return SDValue();
-  }
-
-  const APFloat &C = CFP->getValueAPF();
-
+SDValue SITargetLowering::getCanonicalConstantFP(
+  SelectionDAG &DAG, const SDLoc &SL, EVT VT, const APFloat &C) const {
   // Flush denormals to 0 if not enabled.
-  if (C.isDenormal()) {
-    EVT VT = N->getValueType(0);
-    EVT SVT = VT.getScalarType();
-    if (SVT == MVT::f32 && !Subtarget->hasFP32Denormals())
-      return DAG.getConstantFP(0.0, SDLoc(N), VT);
-
-    if (SVT == MVT::f64 && !Subtarget->hasFP64Denormals())
-      return DAG.getConstantFP(0.0, SDLoc(N), VT);
-
-    if (SVT == MVT::f16 && !Subtarget->hasFP16Denormals())
-      return DAG.getConstantFP(0.0, SDLoc(N), VT);
-  }
+  if (C.isDenormal() && !denormalsEnabledForType(VT))
+    return DAG.getConstantFP(0.0, SL, VT);
 
   if (C.isNaN()) {
-    EVT VT = N->getValueType(0);
     APFloat CanonicalQNaN = APFloat::getQNaN(C.getSemantics());
     if (C.isSignaling()) {
       // Quiet a signaling NaN.
-      return DAG.getConstantFP(CanonicalQNaN, SDLoc(N), VT);
+      // FIXME: Is this supposed to preserve payload bits?
+      return DAG.getConstantFP(CanonicalQNaN, SL, VT);
     }
 
     // Make sure it is the canonical NaN bitpattern.
@@ -6853,10 +6912,68 @@ SDValue SITargetLowering::performFCanonicalizeCombine(
     // TODO: Can we use -1 as the canonical NaN value since it's an inline
     // immediate?
     if (C.bitcastToAPInt() != CanonicalQNaN.bitcastToAPInt())
-      return DAG.getConstantFP(CanonicalQNaN, SDLoc(N), VT);
+      return DAG.getConstantFP(CanonicalQNaN, SL, VT);
   }
 
-  return N->getOperand(0);
+  // Already canonical.
+  return DAG.getConstantFP(C, SL, VT);
+}
+
+static bool vectorEltWillFoldAway(SDValue Op) {
+  return Op.isUndef() || isa<ConstantFPSDNode>(Op);
+}
+
+SDValue SITargetLowering::performFCanonicalizeCombine(
+  SDNode *N,
+  DAGCombinerInfo &DCI) const {
+  SelectionDAG &DAG = DCI.DAG;
+  SDValue N0 = N->getOperand(0);
+  EVT VT = N->getValueType(0);
+
+  // fcanonicalize undef -> qnan
+  if (N0.isUndef()) {
+    APFloat QNaN = APFloat::getQNaN(SelectionDAG::EVTToAPFloatSemantics(VT));
+    return DAG.getConstantFP(QNaN, SDLoc(N), VT);
+  }
+
+  if (ConstantFPSDNode *CFP = isConstOrConstSplatFP(N0)) {
+    EVT VT = N->getValueType(0);
+    return getCanonicalConstantFP(DAG, SDLoc(N), VT, CFP->getValueAPF());
+  }
+
+  // fcanonicalize (build_vector x, k) -> build_vector (fcanonicalize x),
+  //                                                   (fcanonicalize k)
+  //
+  // fcanonicalize (build_vector x, undef) -> build_vector (fcanonicalize x), 0
+
+  // TODO: This could be better with wider vectors that will be split to v2f16,
+  // and to consider uses since there aren't that many packed operations.
+  if (N0.getOpcode() == ISD::BUILD_VECTOR && VT == MVT::v2f16) {
+    SDLoc SL(N);
+    SDValue NewElts[2];
+    SDValue Lo = N0.getOperand(0);
+    SDValue Hi = N0.getOperand(1);
+    if (vectorEltWillFoldAway(Lo) || vectorEltWillFoldAway(Hi)) {
+      for (unsigned I = 0; I != 2; ++I) {
+        SDValue Op = N0.getOperand(I);
+        EVT EltVT = Op.getValueType();
+        if (ConstantFPSDNode *CFP = dyn_cast<ConstantFPSDNode>(Op)) {
+          NewElts[I] = getCanonicalConstantFP(DAG, SL, EltVT,
+                                              CFP->getValueAPF());
+        } else if (Op.isUndef()) {
+          // This would ordinarily be folded to a qNaN. Since this may be half
+          // of a packed operation, it may be cheaper to use a 0.
+          NewElts[I] = DAG.getConstantFP(0.0f, SL, EltVT);
+        } else {
+          NewElts[I] = DAG.getNode(ISD::FCANONICALIZE, SL, EltVT, Op);
+        }
+      }
+
+      return DAG.getBuildVector(VT, SL, NewElts);
+    }
+  }
+
+  return isCanonicalized(DAG, N0) ? N0 : SDValue();
 }
 
 static unsigned minMaxOpcToMin3Max3Opc(unsigned Opc) {
@@ -6962,7 +7079,7 @@ SDValue SITargetLowering::performFPMed3ImmCombine(SelectionDAG &DAG,
     // then give the other result, which is different from med3 with a NaN
     // input.
     SDValue Var = Op0.getOperand(0);
-    if (!isKnownNeverSNan(DAG, Var))
+    if (!DAG.isKnownNeverSNaN(Var))
       return SDValue();
 
     return DAG.getNode(AMDGPUISD::FMED3, SL, K0->getValueType(0),
@@ -7547,8 +7664,10 @@ SDValue SITargetLowering::performFMACombine(SDNode *N,
       return SDValue();
 
     if ((Vec1 == Vec3 && Vec2 == Vec4) ||
-        (Vec1 == Vec4 && Vec2 == Vec3))
-      return DAG.getNode(AMDGPUISD::FDOT2, SL, MVT::f32, Vec1, Vec2, FMAAcc);
+        (Vec1 == Vec4 && Vec2 == Vec3)) {
+      return DAG.getNode(AMDGPUISD::FDOT2, SL, MVT::f32, Vec1, Vec2, FMAAcc,
+                         DAG.getTargetConstant(0, SL, MVT::i1));
+    }
   }
   return SDValue();
 }
@@ -8437,4 +8556,17 @@ bool SITargetLowering::isSDNodeSourceOfDivergence(const SDNode * N,
       return true;
   }
   return false;
+}
+
+bool SITargetLowering::denormalsEnabledForType(EVT VT) const {
+  switch (VT.getScalarType().getSimpleVT().SimpleTy) {
+  case MVT::f32:
+    return Subtarget->hasFP32Denormals();
+  case MVT::f64:
+    return Subtarget->hasFP64Denormals();
+  case MVT::f16:
+    return Subtarget->hasFP16Denormals();
+  default:
+    return false;
+  }
 }

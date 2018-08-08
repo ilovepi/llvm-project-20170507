@@ -51,7 +51,7 @@ public:
   enum Generation {
     R600 = 0,
     R700 = 1,
-    EVERGREEN = 2, 
+    EVERGREEN = 2,
     NORTHERN_ISLANDS = 3,
     SOUTHERN_ISLANDS = 4,
     SEA_ISLANDS = 5,
@@ -82,7 +82,7 @@ public:
 
   static const AMDGPUSubtarget &get(const MachineFunction &MF);
   static const AMDGPUSubtarget &get(const TargetMachine &TM,
-                                          const Function &F);
+                                    const Function &F);
 
   /// \returns Default range flat work group size for a calling convention.
   std::pair<unsigned, unsigned> getDefaultFlatWorkGroupSize(CallingConv::ID CC) const;
@@ -231,6 +231,18 @@ public:
   /// Creates value range metadata on an workitemid.* inrinsic call or load.
   bool makeLIDRangeMetadata(Instruction *I) const;
 
+  /// \returns Number of bytes of arguments that are passed to a shader or
+  /// kernel in addition to the explicit ones declared for the function.
+  unsigned getImplicitArgNumBytes(const Function &F) const {
+    if (isMesaKernel(F))
+      return 16;
+    return AMDGPU::getIntegerAttribute(F, "amdgpu-implicitarg-num-bytes", 0);
+  }
+  uint64_t getExplicitKernArgSize(const Function &F,
+                                  unsigned &MaxAlign) const;
+  unsigned getKernArgSegmentSize(const Function &F,
+                                 unsigned &MaxAlign) const;
+
   virtual ~AMDGPUSubtarget() {}
 };
 
@@ -325,6 +337,7 @@ protected:
   bool IsGCN;
   bool GCN3Encoding;
   bool CIInsts;
+  bool VIInsts;
   bool GFX9Insts;
   bool SGPRInitBug;
   bool HasSMemRealTime;
@@ -669,14 +682,6 @@ public:
     return D16PreservesUnusedBits;
   }
 
-  /// \returns Number of bytes of arguments that are passed to a shader or
-  /// kernel in addition to the explicit ones declared for the function.
-  unsigned getImplicitArgNumBytes(const Function &F) const {
-    if (isMesaKernel(F))
-      return 16;
-    return AMDGPU::getIntegerAttribute(F, "amdgpu-implicitarg-num-bytes", 0);
-  }
-
   // Scratch is allocated in 256 dword per wave blocks for the entire
   // wavefront. When viewed from the perspecive of an arbitrary workitem, this
   // is 4-byte aligned.
@@ -824,10 +829,6 @@ public:
   bool hasReadM0SendMsgHazard() const {
     return getGeneration() >= AMDGPUSubtarget::VOLCANIC_ISLANDS;
   }
-
-  uint64_t getExplicitKernArgSize(const Function &F) const;
-  unsigned getKernArgSegmentSize(const Function &F,
-                                 int64_t ExplicitArgBytes = -1) const;
 
   /// Return the maximum number of waves per SIMD for kernels using \p SGPRs
   /// SGPRs
