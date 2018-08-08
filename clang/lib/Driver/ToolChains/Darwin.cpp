@@ -18,6 +18,7 @@
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
+#include "clang/Driver/SyringeArgs.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/Path.h"
@@ -1050,6 +1051,17 @@ void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
                     RLO);
 }
 
+void DarwinClang::addSyringeRTLibArgs(const llvm::opt::ArgList &Args,
+                                      llvm::opt::ArgStringList &CmdArgs,
+                                      bool Shared) const {
+  auto RLO = RuntimeLinkOptions(RLO_AlwaysLink | (Shared ? RLO_AddRPath : 0U));
+  AddLinkRuntimeLib(Args, CmdArgs,
+                    (Twine("libclang_rt.syringe_") + getOSLibraryNameSuffix() +
+                     (Shared ? "_dynamic.dylib" : ".a"))
+                        .str(),
+                    RLO);
+}
+
 ToolChain::RuntimeLibType DarwinClang::GetRuntimeLibType(
     const ArgList &Args) const {
   if (Arg* A = Args.getLastArg(options::OPT_rtlib_EQ)) {
@@ -1080,6 +1092,10 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   if (const Arg *A = Args.getLastArg(options::OPT_static_libgcc)) {
     getDriver().Diag(diag::err_drv_unsupported_opt) << A->getAsString(Args);
     return;
+  }
+
+  if (getSyringeArgs().needsSyringeRt()) {
+    addSyringeRTLibArgs(Args, CmdArgs, false);
   }
 
   const SanitizerArgs &Sanitize = getSanitizerArgs();

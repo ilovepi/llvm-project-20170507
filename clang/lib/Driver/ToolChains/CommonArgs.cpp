@@ -32,6 +32,7 @@
 #include "clang/Driver/ToolChain.h"
 #include "clang/Driver/Util.h"
 #include "clang/Driver/XRayArgs.h"
+#include "clang/Driver/SyringeArgs.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
@@ -736,7 +737,36 @@ bool tools::addSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   return !StaticRuntimes.empty() || !NonWholeStaticRuntimes.empty();
 }
 
-bool tools::addXRayRuntime(const ToolChain&TC, const ArgList &Args, ArgStringList &CmdArgs) {
+bool tools::addSyringeRuntime(const ToolChain &TC, const ArgList &Args,
+                              ArgStringList &CmdArgs) {
+  if (Args.hasArg(options::OPT_shared))
+    return false;
+
+  if (TC.getSyringeArgs().needsSyringeRt()) {
+    CmdArgs.push_back("-whole-archive");
+    CmdArgs.push_back(TC.getCompilerRTArgString(Args, "syringe", false));
+    CmdArgs.push_back("-no-whole-archive");
+    return true;
+  }
+
+  return false;
+}
+
+void tools::linkSyringeRuntimeDeps(const ToolChain &TC,
+                                   ArgStringList &CmdArgs) {
+  CmdArgs.push_back("--no-as-needed");
+  CmdArgs.push_back("-lpthread");
+  if (TC.getTriple().getOS() != llvm::Triple::OpenBSD)
+    CmdArgs.push_back("-lrt");
+  CmdArgs.push_back("-lm");
+
+  if (TC.getTriple().getOS() != llvm::Triple::FreeBSD &&
+      TC.getTriple().getOS() != llvm::Triple::NetBSD &&
+      TC.getTriple().getOS() != llvm::Triple::OpenBSD)
+    CmdArgs.push_back("-ldl");
+}
+
+bool tools::addXRayRuntime(const ToolChain& TC, const ArgList &Args, ArgStringList &CmdArgs) {
   if (Args.hasArg(options::OPT_shared))
     return false;
 

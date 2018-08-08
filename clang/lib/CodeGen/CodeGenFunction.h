@@ -1947,6 +1947,10 @@ public:
   /// instrumented with XRay nop sleds.
   bool ShouldXRayInstrumentFunction() const;
 
+  /// ShouldXRayInstrument - Return true if the current function should be
+  /// instrumented with XRay nop sleds.
+  bool ShouldSyringeInject() const;
+
   /// AlwaysEmitXRayCustomEvents - Return true if we must unconditionally emit
   /// XRay custom event handling calls.
   bool AlwaysEmitXRayCustomEvents() const;
