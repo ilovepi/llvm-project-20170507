@@ -33,6 +33,7 @@
 
 using namespace llvm;
 
+// Strings for Syringe names and Suffix
 static const char *const SyringeModuleCtorName = "syringe.module_ctor";
 static const char *const SyringeInitName = "__syringe_register";
 static const char *const SyringeStubImplSuffix = "$syringe_impl";
@@ -41,19 +42,24 @@ static const char *const SyringeImplPtrSuffix = "$syringe_impl_ptr";
 
 namespace {
 
+// contains data used for registratin function
 struct SyringeInitData {
+  // the address of the original function, serves as key for runtime lookups
   Function *Target;
+  // the address of the new stub impl (the moved body of the origianl function)
   Function *Stub;
+  // the address of the function whose behavior we wish to inject
   Function *Detour;
+  // the global function pointer used in the stub for indirect calls
   GlobalValue *SyringePtr;
 };
 
 } // namespace
 
 // create a single ctor function for the module, whose body should consist of a
-// call to each of the registered syringe functions.
+// series of calls to the registration function. One call per injection site.
 // We create the function, add a basic block to it, and then insert calls to the
-// registration functions
+// registration function for each injection site in the module.
 //
 // example ctor function:
 //
@@ -63,12 +69,13 @@ struct SyringeInitData {
 //      ....
 // }
 //
-static void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &InitData) {
+static void createCtorInit(Module &M,
+                           SmallVector<SyringeInitData, 8> &InitData) {
 
-  // create a ctor
+  // create a ctor to register all injection sites
   Function *Ctor = Function::Create(
       FunctionType::get(Type::getVoidTy(M.getContext()), false),
-      GlobalValue::InternalLinkage, SyringeModuleCtorName + M.getName() , &M);
+      GlobalValue::InternalLinkage, SyringeModuleCtorName + M.getName(), &M);
   BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
   IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
 
@@ -89,6 +96,10 @@ static void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &InitData)
     Value *ParamArgs[] = {Target, Stub, Detour, SyringePtr};
     auto ParamArgsRef = makeArrayRef(ParamArgs, 4);
 
+    // assert that these are the same size incase we are ever change the
+    // implementation
+    assert(ParamArgsRef.size() == ParamTypesRef.size());
+
     // void return type
     auto RetTy = Type::getVoidTy(M.getContext());
 
@@ -101,28 +112,35 @@ static void createCtorInit(Module &M, SmallVector<SyringeInitData, 8> &InitData)
 
     // set its linkage
     RegFunc->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-    // give it a body and have it call the registration function w/ our target
-    // arguments
+
+    // add a call to the registration function w/ our target arguments
     IRB.CreateCall(ConstFn, ParamArgsRef);
   }
 
-  // Ctor->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-  // Ctor->setComdat(M.getOrInsertComdat(kSyringeModuleCtorName));
+  // FIXME: the magic constant is in parts of clang as well, should we move to a
+  // const int? follow Clang's example for setting priority for global ctors
   appendToGlobalCtors(M, Ctor, 65535);
-  // errs() << M;
+}
+
+// Naming APIs
+
+static std::string createSuffixedName(StringRef BaseName, StringRef Suffix) {
+  return (BaseName + Suffix).str();
 }
 
 static std::string createStubNameFromBase(StringRef BaseName) {
-  return (BaseName + SyringeStubImplSuffix).str();
+  return createSuffixedName(BaseName, SyringeStubImplSuffix);
 }
 
 static std::string createImplPtrNameFromBase(StringRef BaseName) {
-  return (BaseName + SyringeImplPtrSuffix).str();
+  return createSuffixedName(BaseName, SyringeImplPtrSuffix);
 }
 
 static std::string createAliasNameFromBase(StringRef BaseName) {
-  return (BaseName + SyringeDetourImplSuffix).str();
+  return createSuffixedName(BaseName, SyringeDetourImplSuffix);
 }
+
+// Module APIs
 
 // check if the module needs the Syringe Pass
 static bool doInjectionForModule(Module &M) {
@@ -169,8 +187,20 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
 }
 
 /// create funciton stub for behavior injection
+// Algorithm:
+// examine the functions in the module.
+// First process any payloads
+// -- makes processing injection sites in the same translation unit easier
+// -- also create any aliases required
+// Next process the injection sites
+// -- create any declarations needed for the payload/alias
+// -- copy the function body of the injeciton site into a new function
+// -- replace the target functions's body with a stub that makes an indirect
+// tail call through an implementation pointer
+// -- record the data required for registering the initialization function
+// -- if any changes to the injection site were made, register the init data in
+// a ctor
 bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
-  // errs() << "Running Behavior Injection Pass\n";
   bool ChangedPayload = false;
   bool ChangedInjection = false;
   SmallVector<SyringeInitData, 8> InitData;
@@ -178,7 +208,6 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
   for (Function &F : M) {
     ChangedPayload = true;
     if (F.hasFnAttribute("SyringePayload")) {
-      // errs() << "Found Syringe Payload\n";
 
       if (F.hasFnAttribute("SyringeTargetFunction")) {
         auto TargetName =
@@ -195,14 +224,12 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
   for (Function &F : M) {
     if (F.hasFnAttribute("SyringeInjectionSite")) {
-      // errs() << "Found Syringe Injection Site\n";
-      ChangedPayload = true;
+      ChangedInjection = true;
       ValueToValueMapTy VMap;
 
       // clone function
       auto *CloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
       auto AliasName = createAliasNameFromBase(F.getName());
-      // errs() << aliasName << "\n";
 
       Function *DetourFunction;
       auto *InternalAlias = M.getNamedAlias(AliasName);
@@ -234,8 +261,9 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
     }
   }
 
-  // if we've made a modification, add a global ctor entry for the function
-  if (ChangedPayload) {
+  // if we've made a modification to the injection site, add a global ctor entry
+  // for the function
+  if (ChangedInjection) {
     createCtorInit(M, InitData);
   }
 

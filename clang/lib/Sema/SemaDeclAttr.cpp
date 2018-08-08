@@ -411,7 +411,7 @@ static void handleSimpleAttributeWithExclusions(Sema &S, Decl *D,
                                                                           AL);
 }
 
-/// Applies the Syringe Payload Attribute sets the payload target string
+/// Applies the Syringe Payload Attribute and sets the payload target string
 static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   StringRef Model;
   SourceLocation LiteralLoc;
