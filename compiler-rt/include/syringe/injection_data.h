@@ -1,3 +1,18 @@
+//===- injection_data.h -----------------------------------------*- C++ -*-===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+//
+// This file is a part of Syringe, a dynamic behavior injection system.
+//
+// Data structures used by the syringe runtime.
+//===----------------------------------------------------------------------===//
+
+
 #ifndef SYRINGE_INJECTION_DATA_H
 #define SYRINGE_INJECTION_DATA_H 1
 

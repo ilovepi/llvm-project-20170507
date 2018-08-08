@@ -66,7 +66,6 @@ if (APPLE)
     STATIC
     OS ${SYRINGE_SUPPORTED_OS}
     ARCHS ${SYRINGE_SUPPORTED_ARCH}
-      #ARCHS ${arch}
     OBJECT_LIBS RTSyringe
                 RTSanitizerCommon
                 RTSanitizerCommonLibc
@@ -75,7 +74,7 @@ if (APPLE)
     LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS} ${WEAK_SYMBOL_LINK_FLAGS}
     LINK_LIBS ${SYRINGE_LINK_LIBS}
     PARENT_TARGET syringe)
- 
+
 else() # not Apple
   foreach(arch ${SYRINGE_SUPPORTED_ARCH})
     if(NOT CAN_TARGET_${arch})
@@ -91,12 +90,12 @@ else() # not Apple
 
     # Common Syringe archive for instrumented binaries.
     add_compiler_rt_runtime(clang_rt.syringe
-     STATIC
-     ARCHS ${arch}
-     CFLAGS ${SYRINGE_CFLAGS}
-     DEFS ${SYRINGE_COMMON_DEFINITIONS}
-     OBJECT_LIBS ${SYRINGE_COMMON_RUNTIME_OBJECT_LIBS}  RTSyringe
-     PARENT_TARGET syringe)
+      STATIC
+      ARCHS ${arch}
+      CFLAGS ${SYRINGE_CFLAGS}
+      DEFS ${SYRINGE_COMMON_DEFINITIONS}
+      OBJECT_LIBS ${SYRINGE_COMMON_RUNTIME_OBJECT_LIBS}  RTSyringe
+      PARENT_TARGET syringe)
   endforeach()
 endif() # not Apple
 
