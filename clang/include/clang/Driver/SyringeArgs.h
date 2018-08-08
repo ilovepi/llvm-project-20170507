@@ -1,4 +1,4 @@
-//===--- SyringeArgs.h - Arguments for Syringe ------------------------*- C++ -*-===//
+//===--- SyringeArgs.h - Arguments for Syringe ------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -28,6 +28,7 @@ public:
   void addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
                llvm::opt::ArgStringList &CmdArgs, types::ID InputType) const;
 
+  /// Checks if the Syringe Runtime is required
   bool needsSyringeRt() const { return SyringeInject && SyringeRT; }
 };
 

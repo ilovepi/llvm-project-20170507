@@ -124,16 +124,6 @@ static std::string createAliasNameFromBase(StringRef BaseName) {
   return (BaseName + SyringeDetourImplSuffix).str();
 }
 
-static std::tuple<std::string, std::string, std::string>
-createNamesFromSyringeAttr(StringRef AttrName) {
-  auto TargetName = AttrName;
-  auto StubName = createStubNameFromBase(TargetName);
-  auto ImplPtrName = createImplPtrNameFromBase(TargetName);
-  return std::tuple<std::string, std::string, std::string>(TargetName, StubName,
-                                                           ImplPtrName);
-}
-
-
 // check if the module needs the Syringe Pass
 static bool doInjectionForModule(Module &M) {
   for (Function &F : M) {

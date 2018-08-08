@@ -481,7 +481,6 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       if (NeedsSyringeDeps)
         linkSyringeRuntimeDeps(ToolChain, CmdArgs);
 
-
       bool WantPthread = Args.hasArg(options::OPT_pthread) ||
                          Args.hasArg(options::OPT_pthreads);
       bool WantAtomic = false;

@@ -1051,17 +1051,15 @@ void DarwinClang::AddLinkSanitizerLibArgs(const ArgList &Args,
                     RLO);
 }
 
-
-void DarwinClang::AddSyringeRTLibArgs(const llvm::opt::ArgList &Args,
-        llvm::opt::ArgStringList &CmdArgs, bool Shared) const {
+void DarwinClang::addSyringeRTLibArgs(const llvm::opt::ArgList &Args,
+                                      llvm::opt::ArgStringList &CmdArgs,
+                                      bool Shared) const {
   auto RLO = RuntimeLinkOptions(RLO_AlwaysLink | (Shared ? RLO_AddRPath : 0U));
   AddLinkRuntimeLib(Args, CmdArgs,
-                    (Twine("libclang_rt.syringe_") +
-                     getOSLibraryNameSuffix() +
+                    (Twine("libclang_rt.syringe_") + getOSLibraryNameSuffix() +
                      (Shared ? "_dynamic.dylib" : ".a"))
                         .str(),
                     RLO);
-
 }
 
 ToolChain::RuntimeLibType DarwinClang::GetRuntimeLibType(
@@ -1097,7 +1095,7 @@ void DarwinClang::AddLinkRuntimeLibArgs(const ArgList &Args,
   }
 
   if (getSyringeArgs().needsSyringeRt()) {
-    AddSyringeRTLibArgs(Args, CmdArgs, false);
+    addSyringeRTLibArgs(Args, CmdArgs, false);
   }
 
   const SanitizerArgs &Sanitize = getSanitizerArgs();

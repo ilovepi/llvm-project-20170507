@@ -7,13 +7,28 @@
 
 namespace __syringe {
 
+
+struct InjectionData {
+  fptr_t OrigFunc;
+  fptr_t StubImpl;
+  fptr_t DetourFunc;
+  fptr_t *ImplPtr;
+  template <typename T, typename R>
+  InjectionData(T OrigFunction, T StubImplementation, T DetourFunction,
+                R ImplPointer)
+      : OrigFunc((fptr_t)OrigFunction), StubImpl((fptr_t)StubImplementation),
+        DetourFunc((fptr_t)DetourFunction), ImplPtr((fptr_t *)ImplPointer) {}
+};
+
+
+
 std::vector<InjectionData> GlobalSyringeData;
 
 InjectionData *findImplPointerImpl(fptr_t target) {
   auto It = std::find_if(GlobalSyringeData.begin(), GlobalSyringeData.end(),
-                          [target](InjectionData It) -> bool {
-                            return (void *)It.OrigFunc == (void *)target;
-                          });
+                         [target](InjectionData It) -> bool {
+                           return (void *)It.OrigFunc == (void *)target;
+                         });
 
   if (It == GlobalSyringeData.end()) {
     return nullptr;

@@ -201,7 +201,7 @@ void openbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(ToolChain.getCompilerRTArgString(Args, "builtins", false));
       linkXRayRuntimeDeps(ToolChain, CmdArgs);
     }
-     if (NeedsSyringeDeps) {
+    if (NeedsSyringeDeps) {
       CmdArgs.push_back(ToolChain.getCompilerRTArgString(Args, "builtins", false));
       linkSyringeRuntimeDeps(ToolChain, CmdArgs);
     }
