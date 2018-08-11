@@ -20,7 +20,7 @@ using namespace llvm::opt;
 
 namespace {
 constexpr char SyringeInstrumentOption[] = "-fsyringe";
-constexpr char SyringeConfigOption[] = "-fsyringe-config-file";
+constexpr char SyringeConfigOption[] = "-fsyringe-config-file=";
 } // namespace
 
 SyringeArgs::SyringeArgs(const ToolChain &TC, const ArgList &Args) {
@@ -79,7 +79,7 @@ void SyringeArgs::addArgs(const ToolChain &TC, const ArgList &Args,
 
   CmdArgs.push_back(SyringeInstrumentOption);
   for (const auto &Config : ConfigFiles) {
-    SmallString<64> ConfigFileOpt("-fsyringe-config-file=");
+    SmallString<64> ConfigFileOpt(SyringeConfigOption);
     ConfigFileOpt += Config;
     CmdArgs.push_back(Args.MakeArgString(ConfigFileOpt));
   }

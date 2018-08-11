@@ -215,6 +215,14 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
   if (skipModule(M)) {
     return false;
   }
+  for(auto& rec : Metadata)
+  {
+    if(M.getName() == rec.Filename)
+    {
+      errs() << "Found a matachin file\n";
+    }
+
+  }
   return doBehaviorInjectionForModule(M);
 }
 
