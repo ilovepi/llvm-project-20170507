@@ -221,6 +221,11 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
     {
       errs() << "Found a matachin file\n";
     }
+    else
+    {
+
+      errs() << "No Match Found!\n";
+    }
 
   }
   return doBehaviorInjectionForModule(M);
