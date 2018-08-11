@@ -18,6 +18,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
+#include "llvm/YAMLSyringeRecord.h"
 
 namespace llvm {
 class ModulePass;
@@ -49,8 +50,12 @@ public:
   /// create funciton stub for behavior injection
   bool doBehaviorInjectionForModule(Module &M);
 
+  bool parse(const std::string &MapFile);
+
 private:
   /* data */
+  std::vector<syringe::YAMLSyringeRecord> Metadata;
+  bool parse(std::unique_ptr<MemoryBuffer> &MapFile);
 };
 } // namespace llvm
 
