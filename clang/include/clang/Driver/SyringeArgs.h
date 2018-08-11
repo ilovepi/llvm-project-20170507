@@ -13,6 +13,9 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 
+#include <vector>
+#include <string>
+
 namespace clang {
 namespace driver {
 
@@ -21,6 +24,7 @@ class ToolChain;
 class SyringeArgs {
   bool SyringeInject = false;
   bool SyringeRT = true;
+  std::vector<std::string> ConfigFiles;
 
 public:
   /// Parses the Syringe arguments from an argument list.

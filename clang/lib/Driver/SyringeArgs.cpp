@@ -11,6 +11,8 @@
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
 
 using namespace clang;
 using namespace clang::driver;
@@ -18,6 +20,7 @@ using namespace llvm::opt;
 
 namespace {
 constexpr char SyringeInstrumentOption[] = "-fsyringe";
+constexpr char SyringeConfigOption[] = "-fsyringe-config-file";
 } // namespace
 
 SyringeArgs::SyringeArgs(const ToolChain &TC, const ArgList &Args) {
@@ -57,6 +60,15 @@ SyringeArgs::SyringeArgs(const ToolChain &TC, const ArgList &Args) {
     if (!Args.hasFlag(options::OPT_fsyringe_link_deps,
                       options::OPT_fnosyringe_link_deps, true))
       SyringeRT = false;
+
+    for (const auto &Filename :
+         Args.getAllArgValues(options::OPT_fsyringe_config_file)) {
+      if (llvm::sys::fs::exists(Filename)) {
+        ConfigFiles.push_back(Filename);
+        // ExtraDeps.push_back(Filename);
+      } else
+        D.Diag(clang::diag::err_drv_no_such_file) << Filename;
+    }
   }
 }
 
@@ -66,4 +78,9 @@ void SyringeArgs::addArgs(const ToolChain &TC, const ArgList &Args,
     return;
 
   CmdArgs.push_back(SyringeInstrumentOption);
+  for (const auto &Config : ConfigFiles) {
+    SmallString<64> ConfigFileOpt("-fsyringe-config-file=");
+    ConfigFileOpt += Config;
+    CmdArgs.push_back(Args.MakeArgString(ConfigFileOpt));
+  }
 }
