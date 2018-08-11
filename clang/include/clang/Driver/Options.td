@@ -1147,6 +1147,11 @@ def fsyringe_link_deps : Flag<["-"], "fsyringe-link-deps">, Group<f_Group>,
 def fnosyringe_link_deps : Flag<["-"], "fnosyringe-link-deps">, Group<f_Group>,
   Flags<[CC1Option]>;
 
+def fsyringe_config_file :
+  JoinedOrSeparate<["-"], "fsyringe-config-file=">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Filename defining Syringe Injeciton sites and payloads in YAML.">;
+
 def fxray_instrument : Flag<["-"], "fxray-instrument">, Group<f_Group>,
   Flags<[CC1Option]>,
   HelpText<"Generate XRay instrumentation sleds on function entry and exit">;

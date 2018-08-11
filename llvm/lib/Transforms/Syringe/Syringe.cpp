@@ -28,6 +28,7 @@
 #include "llvm/Pass.h"
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/SyringeRecord.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
@@ -140,6 +141,37 @@ static std::string createAliasNameFromBase(StringRef BaseName) {
   return createSuffixedName(BaseName, SyringeDetourImplSuffix);
 }
 
+bool SyringeLegacyPass::parse(std::unique_ptr<MemoryBuffer> &MapFile) {
+  bool status = false;
+  yaml::Input yin(MapFile->getBuffer());
+
+  yin >> Metadata;
+  if (yin.error())
+    return false;
+
+  if (!Metadata.empty())
+    status = true;
+
+  for (syringe::YAMLSyringeRecord Rec : Metadata) {
+    Metadata.push_back(Rec);
+  }
+  return status;
+}
+
+bool SyringeLegacyPass::parse(const std::string &MapFile) {
+  ErrorOr<std::unique_ptr<MemoryBuffer>> Mapping =
+      MemoryBuffer::getFile(MapFile);
+
+  if (!Mapping)
+    report_fatal_error("unable to read rewrite map '" + MapFile +
+                       "': " + Mapping.getError().message());
+
+  if (!parse(*Mapping))
+    report_fatal_error("unable to parse rewrite map '" + MapFile + "'");
+
+  return true;
+}
+
 // Module APIs
 
 // check if the module needs the Syringe Pass
@@ -198,8 +230,8 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
 // -- replace the target functions's body with a stub that makes an indirect
 // tail call through an implementation pointer
 // -- record the data required for registering the initialization function
-// -- if any changes to the injection site were made, register the init data in
-// a ctor
+// -- if any changes to the injection site were made, register the init data
+// in a ctor
 bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
   bool ChangedPayload = false;
   bool ChangedInjection = false;
@@ -261,8 +293,8 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
     }
   }
 
-  // if we've made a modification to the injection site, add a global ctor entry
-  // for the function
+  // if we've made a modification to the injection site, add a global ctor
+  // entry for the function
   if (ChangedInjection) {
     createCtorInit(M, InitData);
   }
