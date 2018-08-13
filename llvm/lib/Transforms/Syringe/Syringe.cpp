@@ -215,18 +215,28 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
   if (skipModule(M)) {
     return false;
   }
-  for(auto& rec : Metadata)
-  {
-    if(M.getName() == rec.Filename)
-    {
-      errs() << "Found a matching file\n";
-    }
-    else
-    {
 
-      errs() << "No Match Found!\n";
-    }
+  // If there is a config file, go through it and annotate Syringe functions
+  for (auto &Rec : Metadata) {
+    if (M.getName() == Rec.Filename) {
+      // Annotate targets
+      for (auto &Target : Rec.Targets) {
+        auto F = M.getFunction(Target.Name);
+        if (F != nullptr) {
+          F->addFnAttr("SyringeInjectionSite");
+          break;
+        }
+      }
 
+      // Annotate payloads
+      for (auto &Payload : Rec.Payloads) {
+        auto F = M.getFunction(Payload.Name);
+        if (F != nullptr) {
+          F->addFnAttr("SyringePayload");
+          F->addFnAttr("SyringeTargetFunction", Payload.Target);
+        }
+      }
+    }
   }
   return doBehaviorInjectionForModule(M);
 }
