@@ -911,13 +911,13 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   // Handle Syringe annotations
   if (D && ShouldSyringeInject()) {
     if (const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>()) {
-      Fn->addFnAttr("SyringeInjectionSite");
+      Fn->addFnAttr("syringe-injection-site");
     }
 
     if (const auto *SyringeAttr = D->getAttr<SyringePayloadAttr>()) {
-      Fn->addFnAttr("SyringePayload");
+      Fn->addFnAttr("syringe-payload");
       auto fnName = SyringeAttr->getSyringeTargetFunction();
-      Fn->addFnAttr("SyringeTargetFunction", fnName);
+      Fn->addFnAttr("syringe-target-function", fnName);
     }
 
   }

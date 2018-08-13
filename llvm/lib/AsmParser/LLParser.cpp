@@ -1230,8 +1230,6 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
     }
 
     case lltok::kw_alwaysinline: B.addAttribute(Attribute::AlwaysInline); break;
-    //case lltok::kw_syringe_site: B.addAttribute(Attribute::SyringeInjectionSite); break;
-    //case lltok::kw_syringe_payload: B.addAttribute(Attribute::SyringePayload); break;
     case lltok::kw_argmemonly: B.addAttribute(Attribute::ArgMemOnly); break;
     case lltok::kw_builtin: B.addAttribute(Attribute::Builtin); break;
     case lltok::kw_cold: B.addAttribute(Attribute::Cold); break;

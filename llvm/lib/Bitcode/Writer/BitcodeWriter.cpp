@@ -590,10 +590,6 @@ static uint64_t getAttrKindEncoding(Attribute::AttrKind Kind) {
     return bitc::ATTR_KIND_ALLOC_SIZE;
   case Attribute::AlwaysInline:
     return bitc::ATTR_KIND_ALWAYS_INLINE;
-  //case Attribute::SyringeInjectionSite:
-    //return bitc::ATTR_KIND_SYRINGE_SITE;
-  //case Attribute::SyringePayload:
-    //return bitc::ATTR_KIND_SYRINGE_PAYLOAD;
   case Attribute::ArgMemOnly:
     return bitc::ATTR_KIND_ARGMEMONLY;
   case Attribute::Builtin:

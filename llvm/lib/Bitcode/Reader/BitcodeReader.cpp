@@ -1165,8 +1165,6 @@ static uint64_t getRawAttributeMask(Attribute::AttrKind Val) {
   case Attribute::NoCfCheck:       return 1ULL << 57;
   case Attribute::OptForFuzzing:   return 1ULL << 58;
   case Attribute::ShadowCallStack: return 1ULL << 59;
-  //case Attribute::SyringeInjectionSite: return 1ULL << 60;
-  //case Attribute::SyringePayload: return 1ULL << 61;
   case Attribute::Dereferenceable:
     llvm_unreachable("dereferenceable attribute not supported in raw format");
     break;
@@ -1289,10 +1287,6 @@ static Attribute::AttrKind getAttrFromCode(uint64_t Code) {
     return Attribute::Alignment;
   case bitc::ATTR_KIND_ALWAYS_INLINE:
     return Attribute::AlwaysInline;
-  //case bitc::ATTR_KIND_SYRINGE_SITE:
-    //return Attribute::SyringeInjectionSite;
-  //case bitc::ATTR_KIND_SYRINGE_PAYLOAD:
-    //return Attribute::SyringePayload;
   case bitc::ATTR_KIND_ARGMEMONLY:
     return Attribute::ArgMemOnly;
   case bitc::ATTR_KIND_BUILTIN:
