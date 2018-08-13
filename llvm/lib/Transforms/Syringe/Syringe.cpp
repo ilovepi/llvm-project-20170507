@@ -177,8 +177,8 @@ bool SyringeLegacyPass::parse(const std::string &MapFile) {
 // check if the module needs the Syringe Pass
 static bool doInjectionForModule(Module &M) {
   for (Function &F : M) {
-    if (F.hasFnAttribute("SyringePayload") ||
-        F.hasFnAttribute("SyringeInjectionSite")) {
+    if (F.hasFnAttribute("syringe-payload") ||
+        F.hasFnAttribute("syringe-injection-site")) {
       return true;
     }
   }
@@ -223,7 +223,7 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
       for (auto &Target : Rec.Targets) {
         auto F = M.getFunction(Target.Name);
         if (F != nullptr) {
-          F->addFnAttr("SyringeInjectionSite");
+          F->addFnAttr("syringe-injection-site");
           break;
         }
       }
@@ -232,8 +232,8 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
       for (auto &Payload : Rec.Payloads) {
         auto F = M.getFunction(Payload.Name);
         if (F != nullptr) {
-          F->addFnAttr("SyringePayload");
-          F->addFnAttr("SyringeTargetFunction", Payload.Target);
+          F->addFnAttr("syringe-payload");
+          F->addFnAttr("syringe-target-function", Payload.Target);
         }
       }
     }
@@ -262,11 +262,11 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
   for (Function &F : M) {
     ChangedPayload = true;
-    if (F.hasFnAttribute("SyringePayload")) {
+    if (F.hasFnAttribute("syringe-payload")) {
 
-      if (F.hasFnAttribute("SyringeTargetFunction")) {
+      if (F.hasFnAttribute("syringe-target-function")) {
         auto TargetName =
-            F.getFnAttribute("SyringeTargetFunction").getValueAsString();
+            F.getFnAttribute("syringe-target-function").getValueAsString();
 
         // create alias
         auto NewAlias =
@@ -278,7 +278,7 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
   }
 
   for (Function &F : M) {
-    if (F.hasFnAttribute("SyringeInjectionSite")) {
+    if (F.hasFnAttribute("syringe-injection-site")) {
       ChangedInjection = true;
       ValueToValueMapTy VMap;
 
@@ -292,7 +292,7 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
       if (InternalAlias == nullptr) {
         auto AliasDecl = orc::cloneFunctionDecl(M, F, nullptr);
         AliasDecl->setName(AliasName);
-        AliasDecl->removeFnAttr("SyringeInjectionSite");
+        AliasDecl->removeFnAttr("syringe-injection-site");
         AliasDecl->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
         DetourFunction = AliasDecl;
       } else {
@@ -301,7 +301,7 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
 
       CloneDecl->setName(createStubNameFromBase(F.getName()));
       orc::moveFunctionBody(F, VMap, nullptr, CloneDecl);
-      CloneDecl->removeFnAttr("SyringeInjectionSite");
+      CloneDecl->removeFnAttr("syringe-injection-site");
       auto Stub = CloneDecl;
 
       // create impl pointer
