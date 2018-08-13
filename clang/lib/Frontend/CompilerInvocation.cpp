@@ -2749,6 +2749,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   // -fsyringe
   Opts.SyringeInject = Args.hasArg(OPT_fsyringe, OPT_fnosyringe, false);
+  Opts.SyringeConfigFiles = Args.getAllArgValues(OPT_fsyringe_config_file);
 
   // -fforce-emit-vtables
   Opts.ForceEmitVTables = Args.hasArg(OPT_fforce_emit_vtables);
