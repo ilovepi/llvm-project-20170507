@@ -219,7 +219,7 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
   {
     if(M.getName() == rec.Filename)
     {
-      errs() << "Found a matachin file\n";
+      errs() << "Found a matching file\n";
     }
     else
     {

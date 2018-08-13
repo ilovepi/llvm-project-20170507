@@ -13,8 +13,8 @@
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace clang {
 namespace driver {
@@ -34,6 +34,7 @@ public:
 
   /// Checks if the Syringe Runtime is required
   bool needsSyringeRt() const { return SyringeInject && SyringeRT; }
+  std::vector<std::string> &getConfigFiles() { return ConfigFiles; }
 };
 
 } // namespace driver
