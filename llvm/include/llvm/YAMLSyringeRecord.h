@@ -53,6 +53,7 @@ template <> struct ScalarEnumerationTraits<syringe::SyringeTrigger> {
     IO.enumCase(Type, "NEVER", syringe::SyringeTrigger::NEVER);
     IO.enumCase(Type, "ALWAYS", syringe::SyringeTrigger::ALWAYS);
     IO.enumCase(Type, "COUNT", syringe::SyringeTrigger::COUNT);
+    IO.enumCase(Type, "ONCE", syringe::SyringeTrigger::ONCE);
   }
 };
 
@@ -75,8 +76,8 @@ template <> struct MappingTraits<syringe::YAMLSyringePayload> {
 template <> struct MappingTraits<syringe::YAMLSyringeRecord> {
   static void mapping(IO &IO, syringe::YAMLSyringeRecord &Record) {
     IO.mapRequired("filename", Record.Filename);
-    IO.mapRequired("targets", Record.Targets);
-    IO.mapRequired("payloads", Record.Payloads);
+    IO.mapOptional("targets", Record.Targets);
+    IO.mapOptional("payloads", Record.Payloads);
   }
 };
 
