@@ -314,8 +314,23 @@ static void addEfficiencySanitizerPass(const PassManagerBuilder &Builder,
   PM.add(createEfficiencySanitizerPass(Opts));
 }
 
-static void addSyringePass(legacy::PassManagerBase &PM) {
-  PM.add(createSyringe());
+static void addSyringePass(const PassManagerBuilder &Builder,
+                                       legacy::PassManagerBase &PM) {
+  const PassManagerBuilderWrapper &BuilderWrapper =
+      static_cast<const PassManagerBuilderWrapper&>(Builder);
+  const LangOptions &LangOpts = BuilderWrapper.getLangOpts();
+  auto P = static_cast<SyringeLegacyPass*>(createSyringe());
+  auto FileList = LangOpts.SyringeConfigFiles;
+  if(FileList.empty())
+  {
+    llvm::errs() << "\nFile list was empty!!\n\n";
+  }
+  for(auto& FileName : FileList)
+  {
+    P->parse(FileName);
+  }
+
+  PM.add(P);
 }
 
 static TargetLibraryInfoImpl *createTLII(llvm::Triple &TargetTriple,
@@ -662,7 +677,7 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
   }
 
   if (LangOpts.SyringeInject) {
-    addSyringePass(MPM);
+    addSyringePass(PMBuilder, MPM);
   }
 
   if (CodeGenOpts.hasProfileIRInstr()) {
