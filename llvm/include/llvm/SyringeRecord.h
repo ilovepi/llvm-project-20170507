@@ -1,4 +1,5 @@
-//===- SyringeRecord.h - Syringe Trace Record -----------------------------------===//
+//===- SyringeRecord.h - Syringe Trace Record
+//-----------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,29 +15,25 @@
 #define LLVM_SYRINGE_SYRINGE_RECORD_H
 
 #include <cstdint>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace llvm {
 namespace syringe {
 
+enum class SyringeTrigger { NONE, NEVER, ALWAYS, COUNT, ONCE };
 
-enum class SyringeTrigger {NONE, NEVER, ALWAYS, COUNT};
-
-
-struct SyringeTarget
-{
+struct SyringeTarget {
   std::string Name;
   SyringeTrigger EnableTrigger;
   SyringeTrigger DisableTrigger;
-  uint32_t Count=0;
+  uint32_t Count = 0;
 };
 
-struct SyringePayload{
+struct SyringePayload {
   std::string Name;
   std::string Target;
 };
-
 
 struct SyringeRecord {
   std::string Filename;
