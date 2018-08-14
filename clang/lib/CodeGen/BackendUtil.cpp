@@ -321,10 +321,6 @@ static void addSyringePass(const PassManagerBuilder &Builder,
   const LangOptions &LangOpts = BuilderWrapper.getLangOpts();
   auto P = static_cast<SyringeLegacyPass*>(createSyringe());
   auto FileList = LangOpts.SyringeConfigFiles;
-  if(FileList.empty())
-  {
-    llvm::errs() << "\nFile list was empty!!\n\n";
-  }
   for(auto& FileName : FileList)
   {
     P->parse(FileName);
