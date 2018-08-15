@@ -1,0 +1,9 @@
+- filename: syringe.cpp
+  targets:
+  - name: _Z5hellov
+    enable: ONCE
+    disable: NEVER
+- filename: injection_decl.cpp
+  payloads:
+  - name: _Z8injectedv
+    target: _Z5hellov
