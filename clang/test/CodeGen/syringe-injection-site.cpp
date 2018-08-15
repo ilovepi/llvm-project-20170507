@@ -5,7 +5,7 @@
 
 // CHECK: @"_Z3fooi$detour_impl" = alias void (i32), void (i32)* @_Z3bari
 
-// Make sure that the LLVM attribute for XRay-annotated functions do show up.
+// Make sure that the LLVM attribute for Syringe-annotated functions do show up.
 [[clang::syringe_injection_site]] void foo(int a) {
 // CHECK: define void @_Z3fooi(i32 %a) #0
 // CHECK: %0 = load void (i32)*, void (i32)** @"_Z3fooi$syringe_impl_ptr"
