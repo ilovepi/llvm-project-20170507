@@ -3,7 +3,7 @@
 
 extern int hello_count;
 
-[[clang::syringe_injection_site]] void hello() { ++hello_count; }
+//[[clang::syringe_injection_site]] void hello() { ++hello_count; }
 
 SyringeBase::SyringeBase() : counter(0), other_counter(0) {}
 
