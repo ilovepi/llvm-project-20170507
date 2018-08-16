@@ -6,7 +6,7 @@
 // RUN: echo "  payloads:"                      >> %t.syringe-imbue.yml
 // RUN: echo "  - name: _Z3barv"                >> %t.syringe-imbue.yml
 // RUN: echo "    target: _Z3foov"              >> %t.syringe-imbue.yml
-// RUN: %clang++ -fsyringe -fsyringe-config-file=%t.syringe-imbue.yml \
+// RUN: %clang -fsyringe -fsyringe-config-file=%t.syringe-imbue.yml \
 // RUN:     -x c++ -std=c++11 -emit-llvm -S  %s  -o - | FileCheck %s
 
 void foo(){}

@@ -5,7 +5,8 @@ set(SYRINGE_SOURCES
     syringe_rt.cpp)
 
 set(SYRINGE_HEADERS
-  syringe_rt.h)
+  #syringe_rt.h
+  )
 
 # Create list of all source files for
 # consumption by tests.
@@ -99,6 +100,6 @@ else() # not Apple
   endforeach()
 endif() # not Apple
 
-#if(COMPILER_RT_INCLUDE_TESTS)
-  #add_subdirectory(tests)
-#endif()
+if(COMPILER_RT_INCLUDE_TESTS)
+  add_subdirectory(tests)
+endif()
