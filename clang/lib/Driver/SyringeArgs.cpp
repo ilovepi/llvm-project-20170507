@@ -27,7 +27,8 @@ SyringeArgs::SyringeArgs(const ToolChain &TC, const ArgList &Args) {
   const Driver &D = TC.getDriver();
   const llvm::Triple &Triple = TC.getTriple();
   if (Args.hasFlag(options::OPT_fsyringe, options::OPT_fnosyringe, false)) {
-    if (Triple.getOS() == llvm::Triple::Linux) {
+    if (Triple.getOS() == llvm::Triple::Linux ||
+        Triple.getOS() == llvm::Triple::Fuchsia) {
       switch (Triple.getArch()) {
       case llvm::Triple::x86_64:
       case llvm::Triple::arm:
