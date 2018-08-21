@@ -1,0 +1,9 @@
+- filename: syringe.c
+  targets:
+  - name: hello
+    enable: ONCE
+    disable: NEVER
+- filename: injection_decl.c
+  payloads:
+  - name: injected
+    target: hello

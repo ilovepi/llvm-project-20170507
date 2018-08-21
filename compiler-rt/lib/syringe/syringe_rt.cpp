@@ -17,6 +17,7 @@
 
 #include "syringe/injection_data.h"
 #include "syringe/syringe_rt.h"
+#include "syringe/syringe_rt_cxx.h"
 
 namespace __syringe {
 
@@ -35,9 +36,11 @@ InjectionData *findImplPointerImpl(fptr_t target) {
   }
 }
 
+} // end namespace __syringe
+
 void printSyringeData() {
   std::cout << "Syringe Global Data" << std::endl;
-  for (auto &item : GlobalSyringeData) {
+  for (auto &item : __syringe::GlobalSyringeData) {
     std::cout << "Orig Func: " << (void *)item.OrigFunc
               << ", StubImpl: " << (void *)item.StubImpl
               << ", DetourFunc: " << (void *)item.DetourFunc
@@ -47,8 +50,11 @@ void printSyringeData() {
   std::cout << std::endl;
 }
 
-} // end namespace __syringe
+bool toggleImpl(fptr_t OrigFunc) { return __syringe::toggleImplPtr(OrigFunc); }
 
+bool changeImpl(fptr_t OrigFunc, fptr_t NewImpl) {
+  return __syringe::changeImpl(OrigFunc, NewImpl);
+};
 
 void __syringe_register(void *OrigFunc, void *StubImpl, void *DetourFunc,
                         void **ImplPtr) {

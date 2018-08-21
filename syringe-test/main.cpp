@@ -4,6 +4,7 @@
 #include <cassert>
 #include <iostream>
 #include <syringe/syringe_rt.h>
+#include <syringe/syringe_rt_cxx.h>
 
 using namespace __syringe;
 
@@ -60,14 +61,14 @@ int main() {
 
   // test template function
   assert(foo(1, 1) == 2 && "Problem with original template funciton foo!");
-  toggleImpl(foo<int>);
+  toggleImpl((fptr_t)foo<int>);
   assert(foo(1, 1) == 0 && "injection failed for function foo!");
 
   Adder<int> a(1);
   assert(a.data == 1);
   assert(a.add(1) == 2 && "Problem with original class template Adder::add()!");
 
-  assert(toggleImpl(&Adder<int>::add) &&
+  assert(toggleImplPtr(&Adder<int>::add) &&
          "SyringeBase::increment() could not be toggled!");
 
   assert(a.add(1) == 0 && "Injection failed for class template Adder::add()!");

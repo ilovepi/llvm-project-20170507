@@ -3,7 +3,7 @@
 
 extern int hello_count;
 [[clang::syringe_injection_site]] 
- //inline __attribute__((always_inline))
+ inline __attribute__((always_inline))
   void
 hello() {
   ++hello_count;

@@ -6,6 +6,7 @@ set(SYRINGE_SOURCES
 
 set(SYRINGE_HEADERS
   #syringe_rt.h
+  #syringe_rt_cxx.h
   )
 
 # Create list of all source files for

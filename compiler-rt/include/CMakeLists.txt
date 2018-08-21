@@ -25,7 +25,9 @@ endif(COMPILER_RT_BUILD_XRAY)
 if (COMPILER_RT_BUILD_SYRINGE)
   set(SYRINGE_HEADERS
     syringe/injection_data.h
-    syringe/syringe_rt.h)
+    syringe/syringe_rt.h
+    syringe/syringe_rt_cxx.h
+    )
 endif(COMPILER_RT_BUILD_SYRINGE)
 
 
