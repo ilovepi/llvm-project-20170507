@@ -311,6 +311,8 @@ public:
   typedef OpaquePtr<TemplateName> TemplateTy;
   typedef OpaquePtr<QualType> TypeTy;
 
+  std::vector<FunctionDecl*> FnDeclList;
+
   OpenCLOptions OpenCLFeatures;
   FPOptions FPFeatures;
 

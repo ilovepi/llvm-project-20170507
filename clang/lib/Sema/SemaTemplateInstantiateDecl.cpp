@@ -3785,7 +3785,9 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
   if (Function->isInvalidDecl() || Function->isDefined() ||
       isa<CXXDeductionGuideDecl>(Function))
     return;
-
+  //if (const auto *SyringeAttr = Function->getAttr<SyringeInjectionSiteAttr>()) {
+    //llvm::errs() << "Function: " << Function->getName() << " is annotated!\n";
+  //}
   // Never instantiate an explicit specialization except if it is a class scope
   // explicit specialization.
   TemplateSpecializationKind TSK = Function->getTemplateSpecializationKind();

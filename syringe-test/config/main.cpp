@@ -4,16 +4,10 @@
 #include <iostream>
 #include <syringe/syringe_rt.h>
 
-using namespace __syringe;
-
 int injected_count = 0;
 int hello_count = 0;
 
-
 int main() {
-  // ensure that Syringe metadata is initialized
-  assert(!__syringe::GlobalSyringeData.empty());
-
   hello(); // normal call to hello()
   assert(hello_count == 1 && "Hello Count incorrect");
 

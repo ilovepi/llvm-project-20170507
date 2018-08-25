@@ -856,6 +856,32 @@ void Sema::ActOnEndOfTranslationUnit() {
   assert(DelayedDiagnostics.getCurrentPool() == nullptr
          && "reached end of translation unit with a pool attached?");
 
+  for(auto item: FnDeclList)
+  {
+    // handle injection site
+    if (const auto *SyringeAttr = item->getAttr<SyringeInjectionSiteAttr>()) {
+      llvm::errs() << " Syringe Site: " << item->getName() << "\n";
+    }
+
+    // handle injection payload
+    if (const auto *SyringeAttr = item->getAttr<SyringePayloadAttr>()) {
+      llvm::errs() << " Syringe Payload: " << item->getName() << "\n";
+      auto fnName = SyringeAttr->getSyringeTargetFunction();
+      llvm::errs() << " Syringe Payload Target: " << fnName << "\n";
+      auto It = std::find_if(FnDeclList.begin(), FnDeclList.end(),
+                             [item, fnName](FunctionDecl *It) -> bool {
+                               return It->getName() == fnName &&
+                                      (It->getType().getAsString() ==
+                                       item->getType().getAsString());
+                             });
+      if (It == FnDeclList.end()) {
+        llvm::errs() << "could not find function!\n";
+      } else {
+        llvm::errs() << "-------> looked up name: " << (*It)->getName() << "\n";
+        llvm::errs() << "Type info: " << (*It)->getType().getAsString() << "\n";
+      }
+    }
+  }
   // If code completion is enabled, don't perform any end-of-translation-unit
   // work.
   if (PP.isCodeCompletionEnabled())
