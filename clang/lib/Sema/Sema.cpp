@@ -21,6 +21,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/AST/StmtCXX.h"
+#include "clang/AST/Mangle.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
@@ -856,11 +857,31 @@ void Sema::ActOnEndOfTranslationUnit() {
   assert(DelayedDiagnostics.getCurrentPool() == nullptr
          && "reached end of translation unit with a pool attached?");
 
+  const auto getMangledName = [&](FunctionDecl *decl) {
+    auto mangleContext = Context.createMangleContext();
+
+    if (!mangleContext->shouldMangleDeclName(decl)) {
+      return decl->getNameInfo().getName().getAsString();
+    }
+
+    std::string mangledName;
+    llvm::raw_string_ostream ostream(mangledName);
+
+    mangleContext->mangleName(decl, ostream);
+
+    ostream.flush();
+
+    delete mangleContext;
+
+    return mangledName;
+  };
+
   for(auto item: FnDeclList)
   {
     // handle injection site
     if (const auto *SyringeAttr = item->getAttr<SyringeInjectionSiteAttr>()) {
       llvm::errs() << " Syringe Site: " << item->getName() << "\n";
+        llvm::errs() << "Mangled Name: " << getMangledName(item) << "\n";
     }
 
     // handle injection payload
@@ -869,8 +890,9 @@ void Sema::ActOnEndOfTranslationUnit() {
       auto fnName = SyringeAttr->getSyringeTargetFunction();
       llvm::errs() << " Syringe Payload Target: " << fnName << "\n";
       auto It = std::find_if(FnDeclList.begin(), FnDeclList.end(),
-                             [item, fnName](FunctionDecl *It) -> bool {
-                               return It->getName() == fnName &&
+                             [item, fnName, getMangledName](FunctionDecl *It) -> bool {
+                               return (It->getName() == fnName ||
+                                       fnName == getMangledName(It)) &&
                                       (It->getType().getAsString() ==
                                        item->getType().getAsString());
                              });
@@ -879,6 +901,7 @@ void Sema::ActOnEndOfTranslationUnit() {
       } else {
         llvm::errs() << "-------> looked up name: " << (*It)->getName() << "\n";
         llvm::errs() << "Type info: " << (*It)->getType().getAsString() << "\n";
+        ;
       }
     }
   }
