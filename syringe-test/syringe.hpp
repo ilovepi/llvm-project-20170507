@@ -10,7 +10,8 @@ hello() {
 }
 //[[clang::syringe_injection_site]] void hello();
 
-[[clang::syringe_payload("_Z5hellov")]] void injected();
+//[[clang::syringe_payload("_Z5hellov")]] void injected();
+[[clang::syringe_payload(hello)]] void injected();
 
 class SyringeBase {
 public:

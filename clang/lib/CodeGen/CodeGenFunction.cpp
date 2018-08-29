@@ -916,8 +916,8 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
 
     if (const auto *SyringeAttr = D->getAttr<SyringePayloadAttr>()) {
       Fn->addFnAttr("syringe-payload");
-      auto fnName = SyringeAttr->getSyringeTargetFunction();
-      Fn->addFnAttr("syringe-target-function", fnName);
+      auto fnDecl = SyringeAttr->getSyringeTargetFunction();
+      Fn->addFnAttr("syringe-target-function", fnDecl->getName());
     }
 
   }

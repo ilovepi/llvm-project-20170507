@@ -413,13 +413,79 @@ static void handleSimpleAttributeWithExclusions(Sema &S, Decl *D,
 
 /// Applies the Syringe Payload Attribute and sets the payload target string
 static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
-  StringRef Model;
-  SourceLocation LiteralLoc;
-  if (!S.checkStringLiteralArgumentAttr(AL, 0, Model, &LiteralLoc))
+  //StringRef Model;
+  //SourceLocation LiteralLoc;
+  //if (!S.checkStringLiteralArgumentAttr(AL, 0, Model, &LiteralLoc))
+    //return;
+
+  //D->addAttr(::new (S.Context) SyringePayloadAttr(
+      //AL.getRange(), S.Context, Model, AL.getAttributeSpellingListIndex()));
+
+  Expr *E = AL.getArgAsExpr(0);
+  SourceLocation Loc = E->getExprLoc();
+  FunctionDecl *FD = nullptr;
+  DeclarationNameInfo NI;
+
+  // gcc only allows for simple identifiers. Since we support more than gcc, we
+  // will warn the user.
+  if (auto *DRE = dyn_cast<DeclRefExpr>(E)) {
+    if (DRE->hasQualifier())
+      S.Diag(Loc, diag::warn_cleanup_ext);
+    FD = dyn_cast<FunctionDecl>(DRE->getDecl());
+    NI = DRE->getNameInfo();
+    if (!FD) {
+      S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 1
+        << NI.getName();
+      return;
+    }
+  } else if (auto *ULE = dyn_cast<UnresolvedLookupExpr>(E)) {
+    if (ULE->hasExplicitTemplateArgs())
+      S.Diag(Loc, diag::warn_cleanup_ext);
+    FD = S.ResolveSingleFunctionTemplateSpecialization(ULE, true);
+    NI = ULE->getNameInfo();
+    if (!FD) {
+      S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 2
+        << NI.getName();
+      if (ULE->getType() == S.Context.OverloadTy)
+        S.NoteAllOverloadCandidates(ULE);
+      return;
+    }
+  }else if(auto *METH = dyn_cast<DependentScopeDeclRefExpr>(E)){
+    llvm::errs() << "\n~~~~~~DependentScopeDeclRefExpr!!!!\n";
+    METH->dumpPretty(S.Context);
+    llvm::errs() << "\nNAME: " << METH->getDeclName() <<"\n\n";
+    auto nameInfo =   getIdentifierTable().get( METH->getNameInfo().getAsString());
+    S.Context.getDependentTemplateName(METH->getQualifier(), nameInfo);
+    //METH->additionalSizeTAlloc
+    //FD = S.ResolveSingleFunctionTemplateSpecialization(METH, true);
+    //NI = METH->getNameInfo();
+    //if (!FD) {
+      //S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 1
+        //<< NI.getName();
+      //return;
+    //}
+    S.Diag(Loc, diag::err_diagnose_if_invalid_diagnostic_type) << 0;
     return;
+  } else {
+    llvm::errs() <<"Something wrong with: " <<   "\n";E->dump();
+    llvm::errs() << "\nUnknown Error Here!!!!<--------\n\n";
+    S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 0;
+    return;
+  }
+
+  // We're currently more strict than GCC about what function types we accept.
+  // If this ever proves to be a problem it should be easy to fix.
+  //QualType Ty = S.Context.getPointerType(cast<VarDecl>(D)->getType());
+  //QualType ParamTy = FD->getParamDecl(0)->getType();
+  //if (S.CheckAssignmentConstraints(FD->getParamDecl(0)->getLocation(),
+                                   //ParamTy, Ty) != Sema::Compatible) {
+    //S.Diag(Loc, diag::err_attribute_cleanup_func_arg_incompatible_type)
+      //<< NI.getName() << ParamTy << Ty;
+    //return;
+  //}
 
   D->addAttr(::new (S.Context) SyringePayloadAttr(
-      AL.getRange(), S.Context, Model, AL.getAttributeSpellingListIndex()));
+      AL.getRange(), S.Context, FD, AL.getAttributeSpellingListIndex()));
 }
 
 /// Check if the passed-in expression is of type int or bool.

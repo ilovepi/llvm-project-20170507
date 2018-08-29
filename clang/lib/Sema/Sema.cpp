@@ -887,7 +887,7 @@ void Sema::ActOnEndOfTranslationUnit() {
     // handle injection payload
     if (const auto *SyringeAttr = item->getAttr<SyringePayloadAttr>()) {
       llvm::errs() << " Syringe Payload: " << item->getName() << "\n";
-      auto fnName = SyringeAttr->getSyringeTargetFunction();
+      auto fnName = SyringeAttr->getSyringeTargetFunction()->getName();
       llvm::errs() << " Syringe Payload Target: " << fnName << "\n";
       auto It = std::find_if(FnDeclList.begin(), FnDeclList.end(),
                              [item, fnName, getMangledName](FunctionDecl *It) -> bool {
@@ -899,9 +899,8 @@ void Sema::ActOnEndOfTranslationUnit() {
       if (It == FnDeclList.end()) {
         llvm::errs() << "could not find function!\n";
       } else {
-        llvm::errs() << "-------> looked up name: " << (*It)->getName() << "\n";
+        llvm::errs() << "-------> looked up name: " << getMangledName(*It) << "\n";
         llvm::errs() << "Type info: " << (*It)->getType().getAsString() << "\n";
-        ;
       }
     }
   }

@@ -631,7 +631,8 @@ def SyringeInjectionSite : InheritableAttr {
 def SyringePayload : InheritableAttr {
   let Spellings = [Clang<"syringe_payload">];
   let Subjects = SubjectList<[Function, ObjCMethod]>;
-  let Args = [StringArgument<"SyringeTargetFunction">];
+  let Args = [FunctionArgument<"SyringeTargetFunction">];
+  /*let Args = [StringArgument<"SyringeTargetFunction">];*/
   let Documentation = [SyringeDocs];
 }
 
