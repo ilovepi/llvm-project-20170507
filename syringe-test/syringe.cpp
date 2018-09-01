@@ -13,8 +13,9 @@ SyringeDerived::SyringeDerived() {}
   return counter;
 }
 
-[[clang::syringe_payload("_ZN11SyringeBase10getCounterEv")]] int
-SyringeDerived::getCounter() {
+//[[clang::syringe_payload(SyringeBase::getCounter)]]
+__attribute__((syringe_class_payload(SyringeBase))) 
+int SyringeDerived::getCounter() {
   return other_counter;
 }
 

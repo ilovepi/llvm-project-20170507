@@ -636,6 +636,13 @@ def SyringePayload : InheritableAttr {
   let Documentation = [SyringeDocs];
 }
 
+def SyringeClassPayload : InheritableAttr {
+  let Spellings = [Clang<"syringe_class_payload">];
+  let Subjects = SubjectList<[Function, ObjCMethod]>;
+  let Args = [IdentifierArgument<"SyringeTargetClass">];
+  /*let Args = [StringArgument<"SyringeTargetFunction">];*/
+  let Documentation = [SyringeDocs];
+}
 def XRayInstrument : InheritableAttr {
   let Spellings = [Clang<"xray_always_instrument">,
                    Clang<"xray_never_instrument">];

@@ -19,6 +19,7 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/CXXInheritance.h"
 #include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/AST/Mangle.h"
@@ -876,34 +877,150 @@ void Sema::ActOnEndOfTranslationUnit() {
     return mangledName;
   };
 
-  for(auto item: FnDeclList)
-  {
-    // handle injection site
-    if (const auto *SyringeAttr = item->getAttr<SyringeInjectionSiteAttr>()) {
-      llvm::errs() << " Syringe Site: " << item->getName() << "\n";
-        llvm::errs() << "Mangled Name: " << getMangledName(item) << "\n";
-    }
+  // enumerate function declarations
+  //for(auto item: FnDeclList)
+  //{
+      //// handle Injectin sites
+      //// handle payloads
+      //// handle templates
+      //// handle class payload
+      //// handle class template
+      //// make sure that when template instantiation occurs
+      //// payloads are instantiated with their injection sites
 
-    // handle injection payload
-    if (const auto *SyringeAttr = item->getAttr<SyringePayloadAttr>()) {
-      llvm::errs() << " Syringe Payload: " << item->getName() << "\n";
-      auto fnName = SyringeAttr->getSyringeTargetFunction()->getName();
-      llvm::errs() << " Syringe Payload Target: " << fnName << "\n";
-      auto It = std::find_if(FnDeclList.begin(), FnDeclList.end(),
-                             [item, fnName, getMangledName](FunctionDecl *It) -> bool {
-                               return (It->getName() == fnName ||
-                                       fnName == getMangledName(It)) &&
-                                      (It->getType().getAsString() ==
-                                       item->getType().getAsString());
-                             });
-      if (It == FnDeclList.end()) {
-        llvm::errs() << "could not find function!\n";
-      } else {
-        llvm::errs() << "-------> looked up name: " << getMangledName(*It) << "\n";
-        llvm::errs() << "Type info: " << (*It)->getType().getAsString() << "\n";
-      }
-    }
-  }
+  //}
+
+  //for(auto item: FnDeclList)
+  //{
+    //// handle injection site
+    //if (const auto *SyringeAttr = item->getAttr<SyringeInjectionSiteAttr>()) {
+      //llvm::errs() << " Syringe Site: " << item->getName() << "\n";
+        //llvm::errs() << "Mangled Name: " << getMangledName(item) << "\n";
+    //}
+
+    //// handle injection payload
+    //if (const auto *SyringeAttr = item->getAttr<SyringePayloadAttr>()) {
+      //llvm::errs() << " Syringe Payload: " << item->getName() << "\n";
+      //auto fnName = SyringeAttr->getSyringeTargetFunction()->getName();
+      //llvm::errs() << " Syringe Payload Target: " << fnName << "\n";
+      //auto It = std::find_if(FnDeclList.begin(), FnDeclList.end(),
+                             //[item, fnName, getMangledName](FunctionDecl *It) -> bool {
+                               //return (It->getName() == fnName ||
+                                       //fnName == getMangledName(It)) &&
+                                      //(It->getType().getAsString() ==
+                                       //item->getType().getAsString());
+                             //});
+      //if (It == FnDeclList.end()) {
+        //llvm::errs() << "could not find function!\n";
+      //} else {
+        //llvm::errs() << "-------> looked up name: " << getMangledName(*It) << "\n";
+        //llvm::errs() << "Type info: " << (*It)->getType().getAsString() << "\n";
+      //}
+    //}
+//// remove later
+    //if (const auto *SyringeAttr = item->getAttr<SyringeClassPayloadAttr>()) {
+      //llvm::errs() << " Syringe Class Payload: " << item->getName() << "\n";
+      //auto className = SyringeAttr->getSyringeTargetClass()->getName();
+      //llvm::errs() << " Syringe Payload Target: " << className << "\n";
+      //auto method = dyn_cast<CXXMethodDecl>(item);
+      //if (method) {
+        //auto parent = method->getParent();
+        //auto target_func = method->getCorrespondingMethodInClass(parent, true);
+        //target_func->dump();
+        //llvm::errs() << "Target Base Function? " << target_func->getName()
+                     //<< "\n";
+        //llvm::errs() << "Target Base class "
+                     //<< target_func->getParent()->getName() << "\n";
+        //auto base_range = parent->bases();
+        //llvm::errs() << "Enumerate Base classes\n";
+        //clang::CXXBasePaths paths;
+        //auto found = parent->lookupInBases(
+            //[className](const CXXBaseSpecifier *Specifier, CXXBasePath &Path) {
+              //auto tdecl = Specifier->getType()
+                               //->getAs<TemplateSpecializationType>()
+                               //->getTemplateName()
+                               //.getAsTemplateDecl();
+              ////tdecl->dump();
+              //llvm::errs() << "Target Template qualified  name: "
+                           //<< dyn_cast<CXXRecordDecl>( tdecl->getTemplatedDecl() ) << "\n";
+
+              //auto name = tdecl->getName();
+              //llvm::errs() << "Target Base class " << name << "\n";
+              //return name == className;
+            //},
+            //paths, true);
+        //paths.
+        //if (found)
+          //llvm::errs() << "found in base!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n";
+        //else
+          //llvm::errs() << "NOTHING \n";
+        //for (auto base : base_range) {
+          //auto btype = base.getType();
+          //auto btype_ptr = btype.getTypePtr();
+          //btype_ptr->dump();
+          //auto base_class = btype_ptr->getAsCXXRecordDecl();
+          //if (base_class)
+            //base_class->dump();
+          //else {
+            //llvm::errs() << "\n--------- Template found ############ \n";
+            //auto crap = dyn_cast<ClassTemplateSpecializationDecl>(
+                //btype_ptr->getAsRecordDecl()->Decl::getCanonicalDecl());
+            //if (crap)
+              //crap->dump();
+            //llvm::errs() << "--------- Template found !!!!!!!!!!!! \n";
+          //}
+
+          //llvm::errs() << btype.getAsString() << "\n";
+          //if (auto bt = base.getType().getBaseTypeIdentifier()) {
+
+            //llvm::errs() << "Base class : " << bt->getName() << "\n";
+            //if (bt == SyringeAttr->getSyringeTargetClass()) {
+              //llvm::errs() << "------------------------- Successss "
+                              //"-------------------------\n";
+
+              //for (auto meth :
+                   //base.getType()->getAsCXXRecordDecl()->methods()) {
+                //if (item->getName() == meth->getName())
+                  //llvm::errs() << "------------------------- I WIN "
+                                  //"-------------------------\n";
+              //}
+            //}
+            ////} else if (auto bt = dyn_cast<ClassTemplateSpecializationDecl>(
+            //// btype_ptr)) {
+            //// llvm::errs() << "Template Base class : " << bt->getName() <<
+            //// "\n"; if (bt->getIdentifier() ==
+            //// SyringeAttr->getSyringeTargetClass()) { llvm::errs() <<
+            //// "~~~~~~~~~~~~~~~~~~~~~~~~~ Successss "
+            ////"~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+
+            //// for (auto meth :
+            //// base.getType()->getAsCXXRecordDecl()->methods()) {
+            //// if (item->getName() == meth->getName())
+            //// llvm::errs() << "~~~~~~~~~~~~~~~~~~~~~~~~~ I WIN "
+            ////"~~~~~~~~~~~~~~~~~~~~~~~~~\n";
+            ////}
+            ////}
+          //}
+          //}
+      //}
+      //llvm::errs() << "Finish Enumerating Base classes\n\n";
+
+      //// auto It = std::find_if(
+      //// FnDeclList.begin(), FnDeclList.end(),
+      ////[item, fnName, getMangledName](FunctionDecl *It) -> bool {
+      //// return (It->getName() == fnName || fnName == getMangledName(It)) &&
+      ////(It->getType().getAsString() ==
+      //// item->getType().getAsString());
+      ////});
+      ////if (It == FnDeclList.end()) {
+        ////llvm::errs() << "could not find function!\n";
+      ////} else {
+        ////llvm::errs() << "-------> looked up name: " << getMangledName(*It)
+                     ////<< "\n";
+        ////llvm::errs() << "Type info: " << (*It)->getType().getAsString() << "\n";
+      ////}
+    //}
+  //}
   // If code completion is enabled, don't perform any end-of-translation-unit
   // work.
   if (PP.isCodeCompletionEnabled())
@@ -953,6 +1070,37 @@ void Sema::ActOnEndOfTranslationUnit() {
                                    Pending.begin(), Pending.end());
     }
 
+    llvm::errs() << "Dump Pending instantiations\n";
+    for (auto &item : PendingInstantiations) {
+      if (auto fdl = dyn_cast<FunctionDecl>(item.first)) {
+        if (const auto *SyringeAttr =
+                fdl->getAttr<SyringePayloadAttr>()) {
+          fdl->dump();
+          // fdl->getPrimaryTemplate()->getTemplatedDecl()->dump();
+          //for (auto &payload : FnDeclList) {
+            //if (const auto *SyringePayload =
+                    //payload->getAttr<SyringePayloadAttr>()) {
+              //auto payload_template = SyringePayload->getSyringeTargetFunction()
+                                          //->getPrimaryTemplate();
+              //if (payload_template &&
+                  //payload_template == fdl->getPrimaryTemplate()) {
+                ////payload->dump();
+                //auto num_parm = payload->getNumParams();
+                //auto pparms = payload->parameters();
+                //auto fparms = fdl->parameters();
+                //auto x = *payload;
+                ////x.attr_begin
+                //for(auto i = 0; i < num_parm; ++i){
+                  //pparms[i] = fparms[i];
+                //}
+                ////payload->dump();
+              //}
+            //}
+          //}
+          //llvm::errs() << "\n";
+        }
+      }
+    }
     PerformPendingInstantiations();
 
     assert(LateParsedInstantiations.empty() &&

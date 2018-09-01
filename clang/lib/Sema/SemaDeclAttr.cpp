@@ -411,6 +411,17 @@ static void handleSimpleAttributeWithExclusions(Sema &S, Decl *D,
                                                                           AL);
 }
 
+static void handleSyringeClassPayloadAttribute(Sema &S, Decl *D, const ParsedAttr &AL) {
+    IdentifierLoc *Parm = AL.isArgIdent(0) ? AL.getArgAsIdent(0) : nullptr;
+
+  if (!Parm) {
+    S.Diag(D->getLocStart(), diag::err_objc_attr_not_id) << AL.getName() << 0;
+    return;
+  }
+  D->addAttr(::new (S.Context) SyringeClassPayloadAttr(
+      AL.getRange(), S.Context, Parm->Ident, AL.getAttributeSpellingListIndex()));
+
+  }
 /// Applies the Syringe Payload Attribute and sets the payload target string
 static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   //StringRef Model;
@@ -450,12 +461,34 @@ static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
         S.NoteAllOverloadCandidates(ULE);
       return;
     }
-  }else if(auto *METH = dyn_cast<DependentScopeDeclRefExpr>(E)){
-    llvm::errs() << "\n~~~~~~DependentScopeDeclRefExpr!!!!\n";
-    METH->dumpPretty(S.Context);
-    llvm::errs() << "\nNAME: " << METH->getDeclName() <<"\n\n";
-    auto nameInfo =   getIdentifierTable().get( METH->getNameInfo().getAsString());
-    S.Context.getDependentTemplateName(METH->getQualifier(), nameInfo);
+  //} else if (auto *METH = dyn_cast<DependentScopeDeclRefExpr>(E)) {
+    //llvm::errs() << "\n~~~~~~DependentScopeDeclRefExpr!!!!\n";
+    //METH->dumpPretty(S.Context);
+    //llvm::errs() << "\nNAME: " << METH->getDeclName() << "\n\n";
+    //llvm::errs() << "\nIdents Begin \n\n";
+    //for(auto& item :S.Context.Idents)
+    //{
+        //if(item.first().contains("Adder"))
+        //llvm::errs() << item.first() << "\n";
+    //}
+
+    //llvm::errs() << "\nIdents End \n\n";
+    //auto *nameInfo = &S.Context.Idents.get(METH->getNameInfo().getAsString());
+    //auto tmp =
+        //S.Context.getDependentTemplateName(METH->getQualifier(), nameInfo);
+    //tmp.dump(llvm::errs());
+    //auto real_tmp = tmp.getAsTemplateDecl();
+    //auto can = tmp.getAsQualifiedTemplateName();
+    //if (can)
+      //can->getTemplateDecl();
+    //else
+      //llvm::errs() << "\nFailed!!!!!!!!!!!!!!!!!!!!!!!\n";
+    //if (real_tmp)
+      //real_tmp->dump();
+    //else
+      //llvm::errs() << "\nFailed!!!!!!!!!!!!!!!!!!!!!!!\n";
+
+    //llvm::errs() << "\n";
     //METH->additionalSizeTAlloc
     //FD = S.ResolveSingleFunctionTemplateSpecialization(METH, true);
     //NI = METH->getNameInfo();
@@ -464,10 +497,10 @@ static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
         //<< NI.getName();
       //return;
     //}
-    S.Diag(Loc, diag::err_diagnose_if_invalid_diagnostic_type) << 0;
-    return;
+    //S.Diag(Loc, diag::err_diagnose_if_invalid_diagnostic_type) << 0;
+    //return;
   } else {
-    llvm::errs() <<"Something wrong with: " <<   "\n";E->dump();
+    llvm::errs() <<"Something wrong with: " <<  "\n";E->dump();
     llvm::errs() << "\nUnknown Error Here!!!!<--------\n\n";
     S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 0;
     return;
@@ -6683,6 +6716,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case ParsedAttr::AT_SyringeInjectionSite:
     handleSimpleAttribute<SyringeInjectionSiteAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_SyringeClassPayload:
+    handleSyringeClassPayloadAttribute(S, D, AL);
     break;
   case ParsedAttr::AT_SyringePayload:
     handleSyringePayloadAttr(S, D, AL);

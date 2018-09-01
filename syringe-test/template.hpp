@@ -24,7 +24,7 @@ public:
 template <typename T> class BadAdder : public Adder<T> {
 public:
   BadAdder(T initialValue) : Adder<T>(initialValue) {}
-  [[clang::syringe_payload(Adder<T>::template add<T>)]] T add(T a) {
+  [[clang::syringe_class_payload(Adder)]] T add(T a) {
   //[[clang::syringe_payload("_ZN5AdderIiE3addEi")]] T add(T a) {
     return this->data - a;
   }
