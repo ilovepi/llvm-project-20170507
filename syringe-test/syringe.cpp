@@ -21,9 +21,10 @@ int SyringeDerived::getCounter() {
 
 [[clang::syringe_injection_site]] void SyringeBase::increment() { ++counter; };
 
-[[clang::syringe_payload("_ZN11SyringeBase9incrementEv")]] void
+//[[clang::syringe_payload("_ZN11SyringeBase9incrementEv")]] void
+[[clang::syringe_class_payload(SyringeBase)]] void
 SyringeDerived::increment() {
   ++other_counter;
 }
 
-void SyringeBase::foo() {}
+void SyringeBase::dumb() {}

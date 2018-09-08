@@ -22,7 +22,7 @@ public:
   int other_counter;
   [[clang::syringe_injection_site]] void virtual increment();
   [[clang::syringe_injection_site]] int getCounter();
-  void foo();
+  void dumb();
 };
 
 class SyringeDerived : public SyringeBase {

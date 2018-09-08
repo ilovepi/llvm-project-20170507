@@ -17,6 +17,7 @@ template class BadAdder<int>;
 int main() {
   // ensure that Syringe metadata is initialized
   assert(!__syringe::GlobalSyringeData.empty());
+  printSyringeData();
 
   hello(); // normal call to hello()
   assert(hello_count == 1 && "Hello Count incorrect");
@@ -62,6 +63,7 @@ int main() {
   // test template function
   assert(foo(1, 1) == 2 && "Problem with original template funciton foo!");
   toggleImpl((fptr_t)foo<int>);
+  printf("address of foo<int>: %p\n",(void*)(fptr_t)foo<int>);
   assert(foo(1, 1) == 0 && "injection failed for function foo!");
 
   Adder<int> a(1);

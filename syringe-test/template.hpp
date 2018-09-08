@@ -1,12 +1,15 @@
 #ifndef TEMPLATE_HPP_
 #define TEMPLATE_HPP_ 1
 
-template <typename T>[[clang::syringe_injection_site]] int foo(T a, T b) {
+template <typename T>
+[[clang::syringe_injection_site]]
+int foo(T a, T b) {
   return a + b;
 }
 
 template <typename T>
-[[clang::syringe_payload(foo<T>)]] int bad_foo(T a, T b) {
+[[clang::syringe_payload(foo<T>)]]
+int bad_foo(T a, T b) {
 //[[clang::syringe_payload("_Z3fooIiEiT_S0_")]] int bad_foo(T a, T b) {
 //[[clang::syringe_payload("foo")]] int bad_foo(T a, T b) {
   return a - b;

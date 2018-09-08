@@ -1440,36 +1440,32 @@ TemplateDeclInstantiator::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   FunctionTemplateDecl *payload_template = nullptr;
   SyringePayloadAttr *SyringePayload = nullptr;
   if (CXXMethodDecl *DMethod = dyn_cast<CXXMethodDecl>(D->getTemplatedDecl()))
-    Instantiated = cast_or_null<FunctionDecl>(VisitCXXMethodDecl(DMethod,
-                                                                 InstParams));
-  else
-  {
-      Instantiated = cast_or_null<FunctionDecl>(VisitFunctionDecl(
-              D->getTemplatedDecl(),
-              InstParams));
+    Instantiated =
+        cast_or_null<FunctionDecl>(VisitCXXMethodDecl(DMethod, InstParams));
+  else {
+    Instantiated = cast_or_null<FunctionDecl>(
+        VisitFunctionDecl(D->getTemplatedDecl(), InstParams));
 
-const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>();
-  if (SyringeAttr) {
-    for (auto &payload : SemaRef.FnDeclList) {
-      SyringePayload = payload->getAttr<SyringePayloadAttr>();
-      if (SyringePayload) {
-        payload_template =
-            SyringePayload->getSyringeTargetFunction()->getPrimaryTemplate();
+    const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>();
+    if (SyringeAttr) {
+      for (auto &payload : SemaRef.FnDeclList) {
+        SyringePayload = payload->getAttr<SyringePayloadAttr>();
+        if (SyringePayload) {
+          payload_template =
+              SyringePayload->getSyringeTargetFunction()->getPrimaryTemplate();
 
-        if (payload_template && payload_template == D) {
-          PayloadPtr = payload;
-          //PayloadPtr->dump();
-          break;
+          if (payload_template && payload_template == D) {
+            PayloadPtr = payload;
+            // PayloadPtr->dump();
+            break;
+          }
         }
       }
     }
-  }
 
-  if(PayloadPtr)
-PayloadInstantiated = cast_or_null<FunctionDecl>(VisitFunctionDecl(
-              payload_template->getTemplatedDecl(),
-              InstParams));
-
+    if (PayloadPtr)
+      PayloadInstantiated = cast_or_null<FunctionDecl>(
+          VisitFunctionDecl(payload_template->getTemplatedDecl(), InstParams));
   }
   if (!Instantiated)
     return nullptr;
@@ -1843,9 +1839,10 @@ TypeSourceInfo *PayloadTInfo;
     // definition. We don't want non-template functions to be marked as being
     // template instantiations.
     Function->setInstantiationOfMemberFunction(D, TSK_ImplicitInstantiation);
-    if (PayloadPtr)
+    if (PayloadPtr) {
       NewPayloadPtr->setInstantiationOfMemberFunction(
           D, TSK_ImplicitInstantiation);
+    }
   }
 
   if (InitFunctionInstantiation(Function, D))
@@ -1862,6 +1859,7 @@ TypeSourceInfo *PayloadTInfo;
         //NewPayloadPtr->parameters()= Function->parameters();
       //NewPayloadPtr->dump();
 
+      Function->dump();
         SemaRef.PendingInstantiations.push_back(std::make_pair(
             NewPayloadPtr, Function->getSourceRange().getBegin()));
     }

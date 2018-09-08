@@ -11,7 +11,7 @@ TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt *.bc *.o *.ll *.a
 FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE)
 #OPTIMIZE=-O0
 #VERBOSE=-v
-DEBUG=-g
+#DEBUG=-g
 LIBS= -lc++abi -I $(HOME)/clang-dev/include/c++/v1  -L $(HOME)/clang-dev/lib
 STD=-stdlib=libc++
 export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
@@ -20,8 +20,8 @@ export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
 
 all: syringe.ll
 
-injection_decl.o: injection_decl.cpp
-	$(CXX) -c injection_decl.cpp $(FLAGS) $(STD)
+#injection_decl.o: injection_decl.cpp
+#	$(CXX) -c injection_decl.cpp $(FLAGS) $(STD)
 
 %.o: %.cpp
 	$(CXX) $< -c $(FLAGS) $(STD)

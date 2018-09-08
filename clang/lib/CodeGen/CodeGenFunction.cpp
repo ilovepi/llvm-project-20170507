@@ -910,16 +910,69 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
 
   // Handle Syringe annotations
   if (D && ShouldSyringeInject()) {
+    const auto getMangledName = [&](FunctionDecl *decl) {
+      auto mangleContext = decl->getASTContext().createMangleContext();
+
+      if (!mangleContext->shouldMangleDeclName(decl)) {
+        return decl->getNameInfo().getName().getAsString();
+      }
+
+      std::string mangledName;
+      llvm::raw_string_ostream ostream(mangledName);
+
+      mangleContext->mangleName(decl, ostream);
+
+      ostream.flush();
+
+      delete mangleContext;
+
+      return mangledName;
+    };
+
     if (const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>()) {
       Fn->addFnAttr("syringe-injection-site");
     }
 
     if (const auto *SyringeAttr = D->getAttr<SyringePayloadAttr>()) {
+      //llvm::errs() << "Dumping LLVM Function:\n" << *Fn << "\n";
       Fn->addFnAttr("syringe-payload");
       auto fnDecl = SyringeAttr->getSyringeTargetFunction();
-      Fn->addFnAttr("syringe-target-function", fnDecl->getName());
+
+      Fn->addFnAttr("syringe-target-function", getMangledName(fnDecl));
     }
 
+    if (const auto *SyringeAttr = D->getAttr<SyringeClassPayloadAttr>()) {
+      //llvm::errs() << "Dumping LLVM Method:\n" << *Fn << "\n";
+      auto curFnDcl = dyn_cast<FunctionDecl>(D);
+      auto method = dyn_cast<CXXMethodDecl>(CurFuncDecl);
+      if (method) {
+        auto parent = method->getParent();
+        auto base_range = parent->bases();
+        for (auto base : base_range) {
+          auto btype = base.getType();
+          //llvm::errs() << btype.getAsString() << "\n";
+          if (auto bt = base.getType().getBaseTypeIdentifier()) {
+
+            //llvm::errs() << "Base class : " << bt->getName() << "\n";
+            if (bt == SyringeAttr->getSyringeTargetClass()) {
+              for (auto meth :
+                   base.getType()->getAsCXXRecordDecl()->methods()) {
+                if (curFnDcl->getName() == meth->getName()) {
+                  // item->addAttr(SyringePayloadAttr::CreateImplicit(
+                  // Context, meth, item->getLocation()));
+                  Fn->addFnAttr("syringe-payload");
+                  Fn->addFnAttr("syringe-target-function",
+                                getMangledName(meth));
+                  //curFnDcl->dump();
+                  // auto llvmFn = dyn_cast<llvm::Function*>(item);
+                  // llvmFn->addFnAttr("syringe-payload");
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // Apply xray attributes to the function (as a string, for now)
@@ -1201,7 +1254,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   if (CurFuncDecl)
     if (const auto *VecWidth = CurFuncDecl->getAttr<MinVectorWidthAttr>())
       LargestVectorWidth = VecWidth->getVectorWidth();
-}
+        }
 
 void CodeGenFunction::EmitFunctionBody(FunctionArgList &Args,
                                        const Stmt *Body) {
