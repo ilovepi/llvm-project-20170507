@@ -440,18 +440,23 @@ static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   // gcc only allows for simple identifiers. Since we support more than gcc, we
   // will warn the user.
   if (auto *DRE = dyn_cast<DeclRefExpr>(E)) {
-    if (DRE->hasQualifier())
+    if (DRE->hasQualifier()) {
       S.Diag(Loc, diag::warn_cleanup_ext);
+    }
     FD = dyn_cast<FunctionDecl>(DRE->getDecl());
     NI = DRE->getNameInfo();
     if (!FD) {
-      S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 1
-        << NI.getName();
+      S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function)
+          << 1 << DRE->getNameInfo().getName();
       return;
     }
   } else if (auto *ULE = dyn_cast<UnresolvedLookupExpr>(E)) {
-    if (ULE->hasExplicitTemplateArgs())
+    if (ULE->hasExplicitTemplateArgs()) {
+      //S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function)
+          //<< 1 << ULE->getNameInfo().getName();
+      //ULE->dump();
       S.Diag(Loc, diag::warn_cleanup_ext);
+    }
     FD = S.ResolveSingleFunctionTemplateSpecialization(ULE, true);
     NI = ULE->getNameInfo();
     if (!FD) {
@@ -461,6 +466,8 @@ static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
         S.NoteAllOverloadCandidates(ULE);
       return;
     }
+    //FD->dump();
+    //llvm::errs() << "Template Def: " << *FD << "\n";
   //} else if (auto *METH = dyn_cast<DependentScopeDeclRefExpr>(E)) {
     //llvm::errs() << "\n~~~~~~DependentScopeDeclRefExpr!!!!\n";
     //METH->dumpPretty(S.Context);
@@ -500,7 +507,8 @@ static void handleSyringePayloadAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     //S.Diag(Loc, diag::err_diagnose_if_invalid_diagnostic_type) << 0;
     //return;
   } else {
-    llvm::errs() <<"Something wrong with: " <<  "\n";E->dump();
+    llvm::errs() <<"Something wrong with: " <<  "\n";
+    E->dump();
     llvm::errs() << "\nUnknown Error Here!!!!<--------\n\n";
     S.Diag(Loc, diag::err_attribute_cleanup_arg_not_function) << 0;
     return;

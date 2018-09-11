@@ -11,7 +11,7 @@ using namespace __syringe;
 int injected_count = 0;
 int hello_count = 0;
 
-template int bad_foo<int>(int a, int b);
+//template int bad_foo<int>(int a, int b);
 template class BadAdder<int>;
 
 int main() {

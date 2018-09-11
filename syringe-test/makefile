@@ -11,7 +11,7 @@ TARGETS=syringe.bc syringe.s syringe_test syringe_test_opt *.bc *.o *.ll *.a
 FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE)
 #OPTIMIZE=-O0
 #VERBOSE=-v
-#DEBUG=-g
+DEBUG=-g
 LIBS= -lc++abi -I $(HOME)/clang-dev/include/c++/v1  -L $(HOME)/clang-dev/lib
 STD=-stdlib=libc++
 export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
@@ -40,6 +40,9 @@ test: syringe_test
 
 opt-test: syringe_test_opt
 	./syringe_test_opt
+
+debug: syringe_test_opt
+	gdb ./syringe_test_opt
 
 syringe_test_opt: main.o syringe.o injection_decl.o
 	$(CXX) main.o syringe.o injection_decl.o  -o syringe_test_opt $(FLAGS) $(LIBS) $(STD)

@@ -1985,12 +1985,16 @@ bool CodeGenModule::MustBeEmitted(const ValueDecl *Global) {
   if (LangOpts.EmitAllDecls)
     return true;
 
+  //if (const auto *FD = dyn_cast<FunctionDecl>(Global))
+    //if (FD->getAttr<SyringePayloadAttr>())
+        //return true;
+
   return getContext().DeclMustBeEmitted(Global);
 }
 
 bool CodeGenModule::MayBeEmittedEagerly(const ValueDecl *Global) {
   if (const auto *FD = dyn_cast<FunctionDecl>(Global))
-    if (FD->getTemplateSpecializationKind() == TSK_ImplicitInstantiation)
+    if (FD->getTemplateSpecializationKind() == TSK_ImplicitInstantiation || FD->getAttr<SyringePayloadAttr>())
       // Implicit template instantiations may change linkage if they are later
       // explicitly instantiated, so they should not be emitted eagerly.
       return false;
@@ -2391,6 +2395,18 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
         getVTables().EmitThunks(GD);
 
       return;
+    }
+
+    if(auto *Func = dyn_cast<FunctionDecl>(D))
+    {
+      if(auto * SyringeAttr = Func->getAttr<SyringePayloadAttr>())
+      {
+        llvm::errs() << "Found Payload Global Definition\n";
+        Func->dump();
+        llvm::errs() << "Payload Global Value:\n";
+        if (GV)
+          GV->dump();
+      }
     }
 
     return EmitGlobalFunctionDefinition(GD, GV);
@@ -4832,7 +4848,8 @@ void CodeGenModule::ClearUnusedCoverageMapping(const Decl *D) {
     return;
   if (const auto *Fn = dyn_cast<FunctionDecl>(D)) {
     if (Fn->isTemplateInstantiation())
-      ClearUnusedCoverageMapping(Fn->getTemplateInstantiationPattern());
+      if(!Fn->getAttr<SyringePayloadAttr>())
+        ClearUnusedCoverageMapping(Fn->getTemplateInstantiationPattern());
   }
   auto I = DeferredEmptyCoverageMappingDecls.find(D);
   if (I == DeferredEmptyCoverageMappingDecls.end())

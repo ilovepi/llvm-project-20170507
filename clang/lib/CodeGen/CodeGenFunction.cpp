@@ -929,27 +929,62 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       return mangledName;
     };
 
+    // llvm::errs() << "Dumping LLVM Function:\n" << *Fn << "\n";
     if (const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>()) {
       Fn->addFnAttr("syringe-injection-site");
+      llvm::errs() << "Annotating Injection site Function: " << *Fn << "\n";
+    } else if (auto TD = D->getAsFunction()->getPrimaryTemplate()) {
+      if (auto SyringeAttr = TD->getAsFunction()->getAttr<SyringeInjectionSiteAttr>()) {
+        Fn->addFnAttr("syringe-injection-site");
+        llvm::errs() << "Annotating Injection site Function: " << *Fn << "\n";
+      }
     }
 
     if (const auto *SyringeAttr = D->getAttr<SyringePayloadAttr>()) {
-      //llvm::errs() << "Dumping LLVM Function:\n" << *Fn << "\n";
-      Fn->addFnAttr("syringe-payload");
-      auto fnDecl = SyringeAttr->getSyringeTargetFunction();
+      if (Fn->hasFnAttribute("syringe-injection-site")) {
+        //llvm::errs() << "Dumping LLVM Function: " << *Fn << "\n";
+        //CurFuncDecl->dump();
+        //D->dump();
+        //llvm::errs() << "Dump Complete\n";
+      } else {
+        Fn->addFnAttr("syringe-payload");
+        //D->dump();
+        auto fnDecl = SyringeAttr->getSyringeTargetFunction();
 
-      Fn->addFnAttr("syringe-target-function", getMangledName(fnDecl));
-    }
+        if (auto tempDecl = fnDecl->getPrimaryTemplate()) {
+          auto curFnDcl = dyn_cast<FunctionDecl>(const_cast<Decl*>(GD.getDecl()));
+          auto tempArgs = curFnDcl->getTemplateSpecializationArgs();
+          void *InsertPos = nullptr;
 
-    if (const auto *SyringeAttr = D->getAttr<SyringeClassPayloadAttr>()) {
+          ArrayRef<TemplateArgument> Innermost = tempArgs->asArray();
+          FunctionDecl *SpecFunc =
+              tempDecl->findSpecialization(Innermost, InsertPos);
+
+          // If we already have a function template specialization, return it.
+          if (SpecFunc) {
+            curFnDcl->dropAttr<SyringePayloadAttr>();
+            curFnDcl->addAttr(::new SyringePayloadAttr(
+                SyringeAttr->getRange(), curFnDcl->getASTContext(), SpecFunc,
+                SyringeAttr->getSpellingListIndex()));
+        llvm::errs() << "Specialized dump: " << getMangledName(SpecFunc) << "\n";
+            SpecFunc->dump();
+            fnDecl = SpecFunc;
+          }
+        }
+        //fnDecl->dump();
+        llvm::errs() << "Target Mangled Name: " << getMangledName(fnDecl) << "\n";
+        Fn->addFnAttr("syringe-target-function", getMangledName(fnDecl));
+      }
+    } else if (const auto *SyringeAttr =
+                   D->getAttr<SyringeClassPayloadAttr>()) {
       //llvm::errs() << "Dumping LLVM Method:\n" << *Fn << "\n";
       auto curFnDcl = dyn_cast<FunctionDecl>(D);
-      auto method = dyn_cast<CXXMethodDecl>(CurFuncDecl);
+      auto method = dyn_cast<CXXMethodDecl>(curFnDcl);
       if (method) {
         auto parent = method->getParent();
         auto base_range = parent->bases();
         for (auto base : base_range) {
-          auto btype = base.getType();
+          //auto btype = base.getType();
           //llvm::errs() << btype.getAsString() << "\n";
           if (auto bt = base.getType().getBaseTypeIdentifier()) {
 
@@ -957,7 +992,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
             if (bt == SyringeAttr->getSyringeTargetClass()) {
               for (auto meth :
                    base.getType()->getAsCXXRecordDecl()->methods()) {
-                if (curFnDcl->getName() == meth->getName()) {
+                if (curFnDcl->getNameAsString() == meth->getNameAsString()) {
                   // item->addAttr(SyringePayloadAttr::CreateImplicit(
                   // Context, meth, item->getLocation()));
                   Fn->addFnAttr("syringe-payload");

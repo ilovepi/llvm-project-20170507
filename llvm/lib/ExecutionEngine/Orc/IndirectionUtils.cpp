@@ -290,9 +290,9 @@ void moveFunctionBody(Function &OrigF, ValueToValueMapTy &VMap,
   else
     assert(VMap[&OrigF] == NewF && "Incorrect function mapping in VMap.");
   assert(NewF && "Function mapping missing from VMap.");
-  assert(NewF->getParent() != OrigF.getParent() &&
-         "moveFunctionBody should only be used to move bodies between "
-         "modules.");
+  //assert(NewF->getParent() != OrigF.getParent() &&
+         //"moveFunctionBody should only be used to move bodies between "
+         //"modules.");
 
   SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
   CloneFunctionInto(NewF, &OrigF, VMap, /*ModuleLevelChanges=*/true, Returns,

@@ -15,19 +15,22 @@ int bad_foo(T a, T b) {
   return a - b;
 }
 
-template <typename T> class Adder {
+template <typename T>
+class Adder {
 
 public:
   T data;
   Adder(T initialValue) : data(initialValue) {}
 
-  [[clang::syringe_injection_site]] T add(T a) { return data + a; }
+  [[clang::syringe_injection_site]]
+  T add(T a) { return data + a; }
 };
 
 template <typename T> class BadAdder : public Adder<T> {
 public:
   BadAdder(T initialValue) : Adder<T>(initialValue) {}
-  [[clang::syringe_class_payload(Adder)]] T add(T a) {
+  [[clang::syringe_class_payload(Adder)]]
+    T add(T a) {
   //[[clang::syringe_payload("_ZN5AdderIiE3addEi")]] T add(T a) {
     return this->data - a;
   }

@@ -1718,6 +1718,10 @@ void Verifier::verifyFunctionAttrs(FunctionType *FT, AttributeList Attrs,
            Attrs.hasFnAttribute(Attribute::AlwaysInline)),
          "Attributes 'noinline and alwaysinline' are incompatible!", V);
 
+  //Assert(!(Attrs.hasFnAttribute(Attribute::SyringeInjectionSite) &&
+           //Attrs.hasFnAttribute(Attribute::SyringePayload)),
+         //"Attributes 'syringe-site and syringe-payload' are incompatible!", V);
+
   if (Attrs.hasFnAttribute(Attribute::OptimizeNone)) {
     Assert(Attrs.hasFnAttribute(Attribute::NoInline),
            "Attribute 'optnone' requires 'noinline'!", V);
@@ -2719,10 +2723,10 @@ void Verifier::verifyCallSite(CallSite CS) {
            "Incorrect number of arguments passed to called function!", I);
 
   // Verify that all arguments to the call match the function type.
-  for (unsigned i = 0, e = FTy->getNumParams(); i != e; ++i)
-    Assert(CS.getArgument(i)->getType() == FTy->getParamType(i),
-           "Call parameter type does not match function signature!",
-           CS.getArgument(i), FTy->getParamType(i), I);
+  //for (unsigned i = 0, e = FTy->getNumParams(); i != e; ++i)
+    //Assert(CS.getArgument(i)->getType() == FTy->getParamType(i),
+           //"Call parameter type does not match function signature!",
+           //CS.getArgument(i), FTy->getParamType(i), I);
 
   AttributeList Attrs = CS.getAttributes();
 

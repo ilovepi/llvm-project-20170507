@@ -14,6 +14,7 @@
 
 #include <iostream>
 #include <vector>
+#include <stdio.h>
 
 #include "syringe/injection_data.h"
 #include "syringe/syringe_rt.h"
@@ -30,6 +31,8 @@ InjectionData *findImplPointerImpl(fptr_t target) {
                          });
 
   if (It == GlobalSyringeData.end()) {
+    //fprintf(stderr, "Target for Syringe injection(%p) not found!\n", target);
+    //exit(1);
     return nullptr;
   } else {
     return &*It;

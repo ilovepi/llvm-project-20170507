@@ -18,6 +18,7 @@
 #include "clang/AST/DependentDiagnostic.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/Mangle.h"
 #include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Sema/Initialization.h"
@@ -1436,7 +1437,7 @@ TemplateDeclInstantiator::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   FunctionDecl *Instantiated = nullptr;
   FunctionDecl *PayloadInstantiated = nullptr;
   FunctionDecl *PayloadPtr = nullptr;
-  FunctionDecl *NewPayloadPtr = nullptr;
+  //FunctionDecl *NewPayloadPtr = nullptr;
   FunctionTemplateDecl *payload_template = nullptr;
   SyringePayloadAttr *SyringePayload = nullptr;
   if (CXXMethodDecl *DMethod = dyn_cast<CXXMethodDecl>(D->getTemplatedDecl()))
@@ -1481,6 +1482,7 @@ TemplateDeclInstantiator::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
 
   if (PayloadInstTemplate)
     PayloadInstTemplate->setAccess(PayloadPtr->getAccess());
+
   InstTemplate->setAccess(D->getAccess());
   assert(InstTemplate &&
          "VisitFunctionDecl/CXXMethodDecl didn't create a template!");
@@ -1682,6 +1684,7 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
   FunctionDecl *PayloadPtr = nullptr;
   FunctionDecl *NewPayloadPtr = nullptr;
   SyringePayloadAttr *SyringePayload = nullptr;
+
   if (SyringeAttr) {
     for (auto &payload : SemaRef.FnDeclList) {
       SyringePayload = payload->getAttr<SyringePayloadAttr>();
@@ -1690,23 +1693,42 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
             SyringePayload->getSyringeTargetFunction()->getPrimaryTemplate();
         if (payload_template && payload_template == FunctionTemplate) {
           PayloadPtr = payload;
-          //PayloadPtr->dump();
+          // PayloadPtr->dump();
           break;
         }
       }
     }
   }
   FunctionTemplateDecl *PayloadFunctionTemplate = nullptr;
-TypeSourceInfo *PayloadTInfo;
-  if (PayloadPtr)
+  TypeSourceInfo *PayloadTInfo = nullptr;
+  QualType *PayloadT = nullptr;
+  DeclContext *PayloadDC = nullptr;
+  if (PayloadPtr) {
     PayloadTInfo = SubstFunctionType(PayloadPtr, NewParams);
+    if (D->isLocalExternDecl()) {
+      PayloadDC = Owner;
+      SemaRef.adjustContextForLocalExternDecl(PayloadDC);
+    } else if (isFriend && QualifierLoc) {
+      CXXScopeSpec SS;
+      SS.Adopt(QualifierLoc);
+      PayloadDC = SemaRef.computeDeclContext(SS);
+    } else {
+      PayloadDC = SemaRef.FindInstantiatedContext(PayloadPtr->getLocation(),
+                                                  PayloadPtr->getDeclContext(),
+                                                  TemplateArgs);
+    }
+  }
 
   DeclarationNameInfo PayloadNameInfo;
+  QualType Junk;
   if (PayloadPtr) {
-  PayloadFunctionTemplate = PayloadPtr->getDescribedFunctionTemplate();
+    PayloadFunctionTemplate = PayloadPtr->getDescribedFunctionTemplate();
     PayloadNameInfo = SemaRef.SubstDeclarationNameInfo(
         PayloadPtr->getNameInfo(), TemplateArgs);
-    //PayloadPtr->dump();
+    // PayloadPtr->dump();
+    Junk = adjustFunctionTypeForInstantiation(SemaRef.Context, PayloadPtr,
+                                                  PayloadTInfo);
+    PayloadT = &Junk;
   }
 
   FunctionDecl *Function;
@@ -1718,14 +1740,16 @@ TypeSourceInfo *PayloadTInfo;
       cast<CXXDeductionGuideDecl>(Function)->setIsCopyDeductionCandidate();
     Function->setAccess(D->getAccess());
 
-    if (PayloadPtr)
+    if (PayloadPtr) {
       NewPayloadPtr = CXXDeductionGuideDecl::Create(
-          SemaRef.Context, DC, PayloadPtr->getInnerLocStart(),
-          DGuide->isExplicit(), PayloadNameInfo, T, PayloadTInfo,
+          SemaRef.Context, PayloadDC, PayloadPtr->getInnerLocStart(),
+          DGuide->isExplicit(), PayloadNameInfo, *PayloadT, PayloadTInfo,
           PayloadPtr->getSourceRange().getEnd());
-    if (DGuide->isCopyDeductionCandidate())
-      cast<CXXDeductionGuideDecl>(NewPayloadPtr)->setIsCopyDeductionCandidate();
-    NewPayloadPtr->setAccess(PayloadPtr->getAccess());
+      if (DGuide->isCopyDeductionCandidate())
+        cast<CXXDeductionGuideDecl>(NewPayloadPtr)
+            ->setIsCopyDeductionCandidate();
+      NewPayloadPtr->setAccess(PayloadPtr->getAccess());
+    }
   } else {
     Function = FunctionDecl::Create(
         SemaRef.Context, DC, D->getInnerLocStart(), NameInfo, T, TInfo,
@@ -1735,9 +1759,11 @@ TypeSourceInfo *PayloadTInfo;
 
     if (PayloadPtr) {
       NewPayloadPtr = FunctionDecl::Create(
-          SemaRef.Context, DC, PayloadPtr->getInnerLocStart(), PayloadNameInfo,
-          T, PayloadTInfo, PayloadPtr->getCanonicalDecl()->getStorageClass(),
-          D->isInlineSpecified(), D->hasWrittenPrototype(), D->isConstexpr());
+          SemaRef.Context, PayloadDC, PayloadPtr->getInnerLocStart(), PayloadNameInfo,
+          *PayloadT, PayloadTInfo,
+          PayloadPtr->getCanonicalDecl()->getStorageClass(),
+          PayloadPtr->isInlineSpecified(), PayloadPtr->hasWrittenPrototype(),
+          PayloadPtr->isConstexpr());
       NewPayloadPtr->setRangeEnd(PayloadPtr->getSourceRange().getEnd());
     }
   }
@@ -1808,14 +1834,18 @@ TypeSourceInfo *PayloadTInfo;
 
     FunctionTemplate->setLexicalDeclContext(LexicalDC);
 
-    if(PayloadPtr)
-    {
-        PayloadFunctionTemplate = FunctionTemplateDecl::Create(SemaRef.Context, DC,
-                                                    NewPayloadPtr->getLocation(),
-                                                    NewPayloadPtr->getDeclName(),
-                                                    TemplateParams, NewPayloadPtr);
+    if (PayloadPtr) {
+      PayloadFunctionTemplate = FunctionTemplateDecl::Create(
+          SemaRef.Context, PayloadDC, NewPayloadPtr->getLocation(),
+          NewPayloadPtr->getDeclName(), TemplateParams, NewPayloadPtr);
 
-        NewPayloadPtr->setDescribedFunctionTemplate(FunctionTemplate);
+      NewPayloadPtr->setDescribedFunctionTemplate(PayloadFunctionTemplate);
+      PayloadFunctionTemplate->setLexicalDeclContext(LexicalDC);
+
+      if (isFriend && PayloadPtr->isThisDeclarationADefinition()) {
+        PayloadFunctionTemplate->setInstantiatedFromMemberTemplate(
+            PayloadPtr->getDescribedFunctionTemplate());
+      }
     }
 
     if (isFriend && D->isThisDeclarationADefinition()) {
@@ -1829,11 +1859,12 @@ TypeSourceInfo *PayloadTInfo;
                             TemplateArgumentList::CreateCopy(SemaRef.Context,
                                                              Innermost),
                                                 /*InsertPos=*/nullptr);
-    if(PayloadPtr)
-        NewPayloadPtr->setFunctionTemplateSpecialization(FunctionTemplate,
+    if(PayloadPtr){
+        NewPayloadPtr->setFunctionTemplateSpecialization(PayloadFunctionTemplate,
                              TemplateArgumentList::CreateCopy(SemaRef.Context,
                                                              Innermost),
                                                 /*InsertPos=*/nullptr);
+    }
   } else if (isFriend && D->isThisDeclarationADefinition()) {
     // Do not connect the friend to the template unless it's actually a
     // definition. We don't want non-template functions to be marked as being
@@ -1841,30 +1872,15 @@ TypeSourceInfo *PayloadTInfo;
     Function->setInstantiationOfMemberFunction(D, TSK_ImplicitInstantiation);
     if (PayloadPtr) {
       NewPayloadPtr->setInstantiationOfMemberFunction(
-          D, TSK_ImplicitInstantiation);
+          PayloadPtr, TSK_ImplicitInstantiation);
     }
   }
 
   if (InitFunctionInstantiation(Function, D))
     Function->setInvalidDecl();
 
-  if (PayloadPtr) {
-    if (InitFunctionInstantiation(NewPayloadPtr, PayloadPtr))
-      NewPayloadPtr->setInvalidDecl();
-    auto payload_template =
-        SyringePayload->getSyringeTargetFunction()->getPrimaryTemplate();
-    if (payload_template &&
-        payload_template == Function->getPrimaryTemplate()) {
-        //Function->dump();
-        //NewPayloadPtr->parameters()= Function->parameters();
-      //NewPayloadPtr->dump();
 
-      Function->dump();
-        SemaRef.PendingInstantiations.push_back(std::make_pair(
-            NewPayloadPtr, Function->getSourceRange().getBegin()));
-    }
-  }
-        bool isExplicitSpecialization = false;
+  bool isExplicitSpecialization = false;
 
   LookupResult Previous(
       SemaRef, Function->getDeclName(), SourceLocation(),
@@ -1987,6 +2003,76 @@ TypeSourceInfo *PayloadTInfo;
   if (Function->isOverloadedOperator() && !DC->isRecord() &&
       PrincipalDecl->isInIdentifierNamespace(Decl::IDNS_Ordinary))
     PrincipalDecl->setNonMemberOperator();
+
+  const auto getMangledName = [&](FunctionDecl *decl) {
+    auto mangleContext = decl->getASTContext().createMangleContext();
+
+    if (!mangleContext->shouldMangleDeclName(decl)) {
+      return decl->getNameInfo().getName().getAsString();
+    }
+    std::string mangledName;
+    llvm::raw_string_ostream ostream(mangledName);
+    mangleContext->mangleName(decl, ostream);
+    ostream.flush();
+    delete mangleContext;
+    return mangledName;
+  };
+
+  if (PayloadFunctionTemplate && !TemplateParams) {
+    ArrayRef<TemplateArgument> Innermost = TemplateArgs.getInnermost();
+
+    void *InsertPos = nullptr;
+    FunctionDecl *SpecFunc =
+        PayloadFunctionTemplate->findSpecialization(Innermost, InsertPos);
+
+    // If we already have a function template specialization, return it.
+    if (SpecFunc) {
+      SpecFunc->dropAttr<SyringePayloadAttr>();
+      SpecFunc->addAttr(::new SyringePayloadAttr(
+          SyringeAttr->getRange(), SemaRef.Context, Function,
+          SyringeAttr->getSpellingListIndex()));
+      SpecFunc->dump();
+      // llvm::errs() << "Template Mangled name == " << getMangledName(Function)
+      // << "\n";
+      auto payload_template = SpecFunc->getAttr<SyringePayloadAttr>()->getSyringeTargetFunction();
+
+      llvm::errs() << "Template Mangled name == " << getMangledName(payload_template) << "\n";
+      PayloadPtr = nullptr;
+    }
+  }
+
+  if (PayloadPtr) {
+    if (InitFunctionInstantiation(NewPayloadPtr, PayloadPtr))
+      NewPayloadPtr->setInvalidDecl();
+    auto payload_template =
+        SyringePayload->getSyringeTargetFunction()->getPrimaryTemplate();
+    if (payload_template &&
+        payload_template == Function->getPrimaryTemplate()) {
+      // Function->dump();
+      NewPayloadPtr->setInstantiationIsPending(true);
+      NewPayloadPtr->dropAttr<SyringePayloadAttr>();
+       //NewPayloadPtr->dump();
+      NewPayloadPtr->addAttr(::new SyringePayloadAttr(
+          SyringeAttr->getRange(), SemaRef.Context, Function,
+          SyringeAttr->getSpellingListIndex()));
+
+       //NewPayloadPtr->dump();
+
+      llvm::errs() << "Template Mangled name == " <<  getMangledName(Function) << "\n";
+
+      // PayloadPtr->dump();
+       PayloadPtr->setIsUsed();
+       NewPayloadPtr->setIsUsed();
+       llvm::errs() << "Injected GlobalID: " <<
+       NewPayloadPtr->getGlobalID() << "\n";
+       llvm::errs() << "Injected GlobalID: " <<
+       Function->getGlobalID() << "\n";
+
+      // Function->dump();
+      SemaRef.PendingInstantiations.push_back(std::make_pair(
+          NewPayloadPtr, PayloadPtr->getSourceRange().getBegin()));
+    }
+  }
 
   assert(!D->isDefaulted() && "only methods should be defaulted");
   return Function;
@@ -3922,11 +4008,6 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
       isa<CXXDeductionGuideDecl>(Function))
     return;
 
-  //if (const auto *SyringeAttr = Function->getAttr<SyringeInjectionSiteAttr>()) {
-    //if(auto x = Function->getPrimaryTemplate())
-        //x->dump();
-    // llvm::errs() << "Function: " << Function->getName() << " is
-    // annotated!\n";
 
     //llvm::errs() << "Dump Pending instantiations\n";
     // fdl->dump();
@@ -4159,6 +4240,13 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
   LocalInstantiations.perform();
   Scope.Exit();
   GlobalInstantiations.perform();
+
+  //if (const auto *SyringeAttr = Function->getAttr<SyringeInjectionSiteAttr>()) {
+  if (const auto *SyringeAttr = Function->getAttr<SyringePayloadAttr>()) {
+    llvm::errs() << "Template Function Instantiation: " << Function->getName() << " is annotated!\n";
+    Function->dump();
+  }
+
 }
 
 VarTemplateSpecializationDecl *Sema::BuildVarTemplateInstantiation(

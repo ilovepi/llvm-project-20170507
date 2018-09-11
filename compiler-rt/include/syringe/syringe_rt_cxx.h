@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <vector>
+#include <cstdio>
 
 namespace __syringe {
 
@@ -54,6 +55,8 @@ void registerInjection(T OrigFunc, T StubImpl, T DetourFunc, R ImplPtr) {
 template <typename T> bool toggleImplPtr(T OrigFunc) {
   auto Ptr = findImplPointer(OrigFunc);
   if (!Ptr) {
+    //fprintf(stderr, "Target for Syringe injection(%p) not found!\n", OrigFunc);
+    //exit(1);
     return false;
   }
 
