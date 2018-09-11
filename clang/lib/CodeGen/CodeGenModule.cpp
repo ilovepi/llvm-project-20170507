@@ -2405,7 +2405,7 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD, llvm::GlobalValue *GV) {
         Func->dump();
         llvm::errs() << "Payload Global Value:\n";
         if (GV)
-          GV->dump();
+          GV->print(llvm::errs());
       }
     }
 
