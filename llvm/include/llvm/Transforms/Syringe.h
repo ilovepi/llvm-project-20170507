@@ -51,6 +51,7 @@ public:
   bool doBehaviorInjectionForModule(Module &M);
 
   bool parse(const std::string &MapFile);
+  void modifyFunctionBody(Module& M, Function *Fn, Function* Payload, Value* SyringeBool);
 
 private:
   /* data */

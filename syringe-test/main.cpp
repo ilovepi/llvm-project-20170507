@@ -17,12 +17,14 @@ template class BadAdder<int>;
 int main() {
   // ensure that Syringe metadata is initialized
   assert(!__syringe::GlobalSyringeData.empty());
+  printSyringeData();
 
   hello(); // normal call to hello()
   assert(hello_count == 1 && "Hello Count incorrect");
 
   // switch implementation
   assert(toggleImpl(hello) && "hello() could not be toggled!");
+  printSyringeData();
   hello(); // should be a call to injected()
   assert(injected_count == 1 && "Hello Count incorrect");
 
@@ -45,11 +47,8 @@ int main() {
   assert(b.counter == 1);
   assert(b.getCounter() == b.counter);
 
-  // get the member pointer to the target baseclass function
-  mPtrTy *myP = (mPtrTy *)convertMemberPtr(&SyringeBase::increment);
-
   // switch its implementation
-  assert(toggleVirtualImpl(myP, &b) &&
+  assert(toggleVirtualImpl(&SyringeBase::increment, &b) &&
          "SyringeBase::increment() could not be toggled!");
   b.increment(); // other_counter = 1
   b.increment(); // other_counter = 2

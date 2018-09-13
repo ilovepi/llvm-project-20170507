@@ -41,6 +41,9 @@ test: syringe_test
 opt-test: syringe_test_opt
 	./syringe_test_opt
 
+debug: syringe_test_opt
+	gdb ./syringe_test_opt
+
 syringe_test_opt: main.o syringe.o injection_decl.o
 	$(CXX) main.o syringe.o injection_decl.o  -o syringe_test_opt $(FLAGS) $(LIBS) $(STD)
 

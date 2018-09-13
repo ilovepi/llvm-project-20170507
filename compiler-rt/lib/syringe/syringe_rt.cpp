@@ -21,11 +21,11 @@
 
 namespace __syringe {
 
-std::vector<InjectionData> GlobalSyringeData;
+std::vector<SimpleInjectionData> GlobalSyringeData;
 
-InjectionData *findImplPointerImpl(fptr_t target) {
+SimpleInjectionData *findImplPointerImpl(fptr_t target) {
   auto It = std::find_if(GlobalSyringeData.begin(), GlobalSyringeData.end(),
-                         [target](InjectionData It) -> bool {
+                         [target](SimpleInjectionData It) -> bool {
                            return (void *)It.OrigFunc == (void *)target;
                          });
 
@@ -42,9 +42,9 @@ void printSyringeData() {
   std::cout << "Syringe Global Data" << std::endl;
   for (auto &item : __syringe::GlobalSyringeData) {
     std::cout << "Orig Func: " << (void *)item.OrigFunc
-              << ", StubImpl: " << (void *)item.StubImpl
-              << ", DetourFunc: " << (void *)item.DetourFunc
-              << ", ImplPtr: " << (void *)item.ImplPtr << std::endl;
+              << ", Injection Enabled Addr: " << (void *)item.InjectionEnabled
+              << ", Injection Enabled Value: "
+              << (*item.InjectionEnabled ? "true" : "false") << std::endl;
   }
 
   std::cout << std::endl;
@@ -52,12 +52,6 @@ void printSyringeData() {
 
 bool toggleImpl(fptr_t OrigFunc) { return __syringe::toggleImplPtr(OrigFunc); }
 
-bool changeImpl(fptr_t OrigFunc, fptr_t NewImpl) {
-  return __syringe::changeImpl(OrigFunc, NewImpl);
-};
-
-void __syringe_register(void *OrigFunc, void *StubImpl, void *DetourFunc,
-                        void **ImplPtr) {
-  __syringe::registerInjection((fptr_t)OrigFunc, (fptr_t)StubImpl,
-                               (fptr_t)DetourFunc, (fptr_t *)ImplPtr);
+void __syringe_register(void *OrigFunc, bool *InjectionEnabled) {
+  __syringe::registerInjection((fptr_t)OrigFunc, InjectionEnabled);
 }

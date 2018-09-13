@@ -29,6 +29,7 @@
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/SyringeRecord.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 
@@ -37,9 +38,8 @@ using namespace llvm;
 // Strings for Syringe names and Suffix
 static const char *const SyringeModuleCtorName = "syringe.module_ctor";
 static const char *const SyringeInitName = "__syringe_register";
-static const char *const SyringeStubImplSuffix = "$syringe_impl";
 static const char *const SyringeDetourImplSuffix = "$detour_impl";
-static const char *const SyringeImplPtrSuffix = "$syringe_impl_ptr";
+static const char *const SyringeBoolSuffix = "$syringe_bool";
 
 namespace {
 
@@ -55,6 +55,13 @@ struct SyringeInitData {
   GlobalValue *SyringePtr;
 };
 
+struct SimpleSyringeInitData {
+  // the address of the original function, serves as key for runtime lookups
+  Function *Target;
+  // the address of the new stub impl (the moved body of the origianl function)
+  GlobalVariable *SyringeBool;
+};
+
 } // namespace
 
 // create a single ctor function for the module, whose body should consist of a
@@ -65,13 +72,13 @@ struct SyringeInitData {
 // example ctor function:
 //
 // void ctor_func_name(){
-//      register(original_func, stub_impl, detour_impl, impl_ptr);
-//      register(original_func2, stub_impl2, detour_impl2, impl_ptr2);
+//      register(original_func, orig_func_bool);
+//      register(original_func2, orig_func_bool2);
 //      ....
 // }
 //
 static void createCtorInit(Module &M,
-                           SmallVector<SyringeInitData, 8> &InitData) {
+                           SmallVector<SimpleSyringeInitData, 8> &InitData) {
 
   // create a ctor to register all injection sites
   Function *Ctor = Function::Create(
@@ -82,20 +89,21 @@ static void createCtorInit(Module &M,
 
   for (auto SID : InitData) {
     auto Target = SID.Target;
-    auto Stub = SID.Stub;
-    auto Detour = SID.Detour;
-    auto SyringePtr = SID.SyringePtr;
+    auto Flag = SID.SyringeBool;
 
     // target function types
     auto FuncTy = Target->getType();
+    auto BoolTy = llvm::Type::getInt8PtrTy(M.getContext());
+    // auto BoolTyPtr = static_cast<Type>(BoolTy);
 
     // the parameter types of the registration function
-    Type *ParamTypes[] = {FuncTy, FuncTy, FuncTy, SyringePtr->getType()};
-    auto ParamTypesRef = makeArrayRef(ParamTypes, 4);
+    // Type *ParamTypes[] = {FuncTy, BoolTyPtr};
+    Type *ParamTypes[] = {FuncTy, BoolTy};
+    auto ParamTypesRef = makeArrayRef(ParamTypes, 2);
 
     // actual parameters
-    Value *ParamArgs[] = {Target, Stub, Detour, SyringePtr};
-    auto ParamArgsRef = makeArrayRef(ParamArgs, 4);
+    Value *ParamArgs[] = {Target, Flag};
+    auto ParamArgsRef = makeArrayRef(ParamArgs, 2);
 
     // assert that these are the same size incase we are ever change the
     // implementation
@@ -129,12 +137,8 @@ static std::string createSuffixedName(StringRef BaseName, StringRef Suffix) {
   return (BaseName + Suffix).str();
 }
 
-static std::string createStubNameFromBase(StringRef BaseName) {
-  return createSuffixedName(BaseName, SyringeStubImplSuffix);
-}
-
-static std::string createImplPtrNameFromBase(StringRef BaseName) {
-  return createSuffixedName(BaseName, SyringeImplPtrSuffix);
+static std::string createBoolNameFromBase(StringRef BaseName) {
+  return createSuffixedName(BaseName, SyringeBoolSuffix);
 }
 
 static std::string createAliasNameFromBase(StringRef BaseName) {
@@ -241,6 +245,43 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
   return doBehaviorInjectionForModule(M);
 }
 
+/// Adds instrumentation to change target of direct dispatch
+// Transforms the function so that it has this general form
+//
+// if(_syringe_boolean == true)
+//  tail call __syringe__detourFunction
+// else
+//  original funciton body
+//
+void SyringeLegacyPass::modifyFunctionBody(Module &M, Function *Fn,
+                                           Function *Payload,
+                                           Value *SyringeBool) {
+  auto &Context = Fn->getContext();
+  auto EntryBB = &Fn->getEntryBlock();
+  BasicBlock *CmpBB =
+      BasicBlock::Create(Context, "syringe_branch", Fn, EntryBB);
+  BasicBlock *InjectBB = BasicBlock::Create(Context, "syringe_inject", Fn);
+
+  SmallVector<Value *, 4> ArgsVec;
+  for (auto &item : Fn->args()) {
+    ArgsVec.push_back((Value *)&item);
+  }
+
+  auto Args = makeArrayRef(ArgsVec);
+  {
+    IRBuilder<> IRB(ReturnInst::Create(Context, InjectBB));
+    auto SyringeCallInst = IRB.CreateCall(Payload, Args);
+    SyringeCallInst->setTailCall();
+  }
+  {
+    IRBuilder<> IRB(CmpBB);
+    auto loadInst =
+        IRB.CreateLoad(SyringeBool, createBoolNameFromBase(Fn->getName()));
+    auto trunc = IRB.CreateTrunc(loadInst, llvm::Type::getInt1Ty(Context));
+    IRB.CreateCondBr(trunc, InjectBB, EntryBB);
+  }
+}
+
 /// create funciton stub for behavior injection
 // Algorithm:
 // examine the functions in the module.
@@ -258,7 +299,7 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
 bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
   bool ChangedPayload = false;
   bool ChangedInjection = false;
-  SmallVector<SyringeInitData, 8> InitData;
+  SmallVector<SimpleSyringeInitData, 8> InitData;
 
   for (Function &F : M) {
     ChangedPayload = true;
@@ -282,8 +323,6 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
       ChangedInjection = true;
       ValueToValueMapTy VMap;
 
-      // clone function
-      auto *CloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
       auto AliasName = createAliasNameFromBase(F.getName());
 
       Function *DetourFunction;
@@ -299,20 +338,19 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
         DetourFunction = dyn_cast<Function>(InternalAlias->getAliasee());
       }
 
-      CloneDecl->setName(createStubNameFromBase(F.getName()));
-      orc::moveFunctionBody(F, VMap, nullptr, CloneDecl);
-      CloneDecl->removeFnAttr("syringe-injection-site");
-      auto Stub = CloneDecl;
+      auto BoolIntializer = ConstantInt::getFalse(M.getContext());
+      auto SyringeBool =
+          new GlobalVariable(M, llvm::Type::BoolTy, false,
+                             GlobalValue::ExternalLinkage, BoolIntializer,
+                             createBoolNameFromBase(F.getName()), nullptr,
+                             GlobalValue::NotThreadLocal, 0, false);
+      SyringeBool->setVisibility(GlobalValue::DefaultVisibility);
 
-      // create impl pointer
-      auto SyringePtr = orc::createImplPointer(
-          *F.getType(), M, createImplPtrNameFromBase(F.getName()), CloneDecl);
-      SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
       auto Target = &F;
 
-      // create stub body for original call
-      orc::makeStub(F, *SyringePtr);
-      InitData.push_back({Target, Stub, DetourFunction, SyringePtr});
+      // modify function body to make direct call to injected alias
+      modifyFunctionBody(M, &F, DetourFunction, SyringeBool);
+      InitData.push_back({Target, SyringeBool});
     }
   }
 
