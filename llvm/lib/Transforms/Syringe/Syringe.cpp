@@ -18,6 +18,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalIFunc.h"
@@ -29,17 +30,19 @@
 #include "llvm/PassRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/SyringeRecord.h"
+#include "llvm/Transforms/Instrumentation.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 
 using namespace llvm;
 
 // Strings for Syringe names and Suffix
 static const char *const SyringeModuleCtorName = "syringe.module_ctor";
 static const char *const SyringeInitName = "__syringe_register";
-static const char *const SyringeStubImplSuffix = "$syringe_impl";
 static const char *const SyringeDetourImplSuffix = "$detour_impl";
-static const char *const SyringeImplPtrSuffix = "$syringe_impl_ptr";
+static const char *const SyringeBoolSuffix = "$syringe_bool";
 
 namespace {
 
