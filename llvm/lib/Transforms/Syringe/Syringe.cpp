@@ -248,6 +248,99 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
   return doBehaviorInjectionForModule(M);
 }
 
+// Note: this code is from lib/Transforms/IPO/MergeFunctions.cpp
+// -- This may be better to just link in, or refactor into a utility lib
+//
+// Helper for writeThunk,
+// Selects proper bitcast operation,
+// but a bit simpler then CastInst::getCastOpcode.
+static Value *createCast(IRBuilder<> &Builder, Value *V, Type *DestTy) {
+  Type *SrcTy = V->getType();
+  if (SrcTy->isStructTy()) {
+    assert(DestTy->isStructTy());
+    assert(SrcTy->getStructNumElements() == DestTy->getStructNumElements());
+    Value *Result = UndefValue::get(DestTy);
+    for (unsigned int I = 0, E = SrcTy->getStructNumElements(); I < E; ++I) {
+      Value *Element =
+          createCast(Builder, Builder.CreateExtractValue(V, makeArrayRef(I)),
+                     DestTy->getStructElementType(I));
+
+      Result = Builder.CreateInsertValue(Result, Element, makeArrayRef(I));
+    }
+    return Result;
+  }
+  assert(!DestTy->isStructTy());
+  if (SrcTy->isIntegerTy() && DestTy->isPointerTy())
+    return Builder.CreateIntToPtr(V, DestTy);
+  else if (SrcTy->isPointerTy() && DestTy->isIntegerTy())
+    return Builder.CreatePtrToInt(V, DestTy);
+  else
+    return Builder.CreateBitCast(V, DestTy);
+}
+
+/// Adds instrumentation to change target of direct dispatch
+// Transforms the function so that it has this general form
+//
+// if(_syringe_boolean == true)
+//  tail call __syringe__detourFunction
+// else
+//  original funciton body
+//
+void SyringeLegacyPass::modifyFunctionBody(Module &M, Function *Fn,
+                                           Function *Payload,
+                                           Value *SyringeBool) {
+  // cache ref to coontext
+  auto &Context = Fn->getContext();
+  auto EntryBB = &Fn->getEntryBlock();
+
+  BasicBlock *CmpBB =
+      BasicBlock::Create(Context, "syringe_branch", Fn, EntryBB);
+  BasicBlock *InjectBB = BasicBlock::Create(Context, "syringe_inject", Fn);
+
+  // Insert call to the injected payload in the then block
+  IRBuilder<> ThenIRB(InjectBB);
+
+  // get the args in a form we can pass to createcall
+  SmallVector<Value *, 4> ArgsVec;
+  for (auto &item : Fn->args()) {
+    // for class members, make sure that we bitcast the this pointer
+    // this is ensured for us by construction when annotating things in the
+    // frontend
+    if (&item == Fn->arg_begin()) {
+      auto bitcast = ThenIRB.CreateBitCast((Value *)&item,
+                                           Payload->arg_begin()->getType());
+      ArgsVec.push_back(bitcast);
+    } else {
+      ArgsVec.push_back((Value *)&item);
+    }
+  }
+
+  auto Args = makeArrayRef(ArgsVec);
+  auto SyringeCallInst = ThenIRB.CreateCall(Payload, Args);
+
+  // make the injected call a tail call, and give it the appropriate return
+  SyringeCallInst->setTailCall();
+  ReturnInst *RI = nullptr;
+  if (Fn->getReturnType()->isVoidTy()) {
+    RI = ThenIRB.CreateRetVoid();
+  } else {
+    RI = ThenIRB.CreateRet(
+        createCast(ThenIRB, SyringeCallInst, Fn->getReturnType()));
+  }
+
+  // the Syringe bool controls the injected behavior
+  // The logic is
+  // if true
+  //   do tail call to injected function
+  //  else
+  //    normal funciton body
+  IRBuilder<> IRB(CmpBB);
+  auto loadInst =
+      IRB.CreateLoad(SyringeBool, createBoolNameFromBase(Fn->getName()));
+  auto trunc = IRB.CreateTrunc(loadInst, llvm::Type::getInt1Ty(Context));
+  IRB.CreateCondBr(trunc, InjectBB, EntryBB);
+}
+
 /// create funciton stub for behavior injection
 // Algorithm:
 // examine the functions in the module.
@@ -263,9 +356,11 @@ bool SyringeLegacyPass::runOnModule(Module &M) {
 // -- if any changes to the injection site were made, register the init data
 // in a ctor
 bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
+  auto cleanupPass = static_cast<UnifyFunctionExitNodes *>(
+      llvm::createUnifyFunctionExitNodesPass());
   bool ChangedPayload = false;
   bool ChangedInjection = false;
-  SmallVector<SyringeInitData, 8> InitData;
+  SmallVector<SimpleSyringeInitData, 8> InitData;
 
   for (Function &F : M) {
     ChangedPayload = true;
@@ -289,14 +384,15 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
       ChangedInjection = true;
       ValueToValueMapTy VMap;
 
-      // clone function
-      auto *CloneDecl = orc::cloneFunctionDecl(M, F, &VMap);
       auto AliasName = createAliasNameFromBase(F.getName());
 
       Function *DetourFunction;
+
+      // lookup the alias from the payload if it is in the same TU
       auto *InternalAlias = M.getNamedAlias(AliasName);
 
       if (InternalAlias == nullptr) {
+        // create allias if our lookup failed
         auto AliasDecl = orc::cloneFunctionDecl(M, F, nullptr);
         AliasDecl->setName(AliasName);
         AliasDecl->removeFnAttr("syringe-injection-site");
@@ -306,20 +402,23 @@ bool SyringeLegacyPass::doBehaviorInjectionForModule(Module &M) {
         DetourFunction = dyn_cast<Function>(InternalAlias->getAliasee());
       }
 
-      CloneDecl->setName(createStubNameFromBase(F.getName()));
-      orc::moveFunctionBody(F, VMap, nullptr, CloneDecl);
-      CloneDecl->removeFnAttr("syringe-injection-site");
-      auto Stub = CloneDecl;
+      // Initialize the Syringe Boolean to 0 (false)
+      auto BoolIntializer = ConstantInt::get(M.getContext(), APInt(8, 0));
+      auto SyringeBool = new GlobalVariable(
+          M, BoolIntializer->getType(), false, GlobalValue::ExternalLinkage,
+          BoolIntializer, createBoolNameFromBase(F.getName()), nullptr,
+          GlobalValue::NotThreadLocal, 0, false);
+      // TODO: Default visibility can be removed after we have a builtin or intrinsic
+      SyringeBool->setVisibility(GlobalValue::DefaultVisibility);
 
-      // create impl pointer
-      auto SyringePtr = orc::createImplPointer(
-          *F.getType(), M, createImplPtrNameFromBase(F.getName()), CloneDecl);
-      SyringePtr->setVisibility(GlobalValue::DefaultVisibility);
       auto Target = &F;
 
-      // create stub body for original call
-      orc::makeStub(F, *SyringePtr);
-      InitData.push_back({Target, Stub, DetourFunction, SyringePtr});
+      // modify function body to make direct call to injected alias
+      modifyFunctionBody(M, &F, DetourFunction, SyringeBool);
+      InitData.push_back({Target, SyringeBool});
+
+      // We've added new control flow and returns, make sure they are patched
+      cleanupPass->runOnFunction(F);
     }
   }
 
