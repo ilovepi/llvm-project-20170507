@@ -19,4 +19,4 @@
 type = Library
 name = Syringe
 parent = Transforms
-required_libraries = Analysis Core MC Support TransformUtils ProfileData OrcJIT
+required_libraries = Analysis Core MC Support TransformUtils ProfileData OrcJIT Instrumentation
