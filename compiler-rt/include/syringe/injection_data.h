@@ -12,7 +12,6 @@
 // Data structures used by the syringe runtime.
 //===----------------------------------------------------------------------===//
 
-
 #ifndef SYRINGE_INJECTION_DATA_H
 #define SYRINGE_INJECTION_DATA_H 1
 
@@ -23,6 +22,7 @@ typedef void (*fptr_t)(void);
 
 namespace __syringe {
 
+// metadata structure for holding implementation pointer data
 struct InjectionData {
   fptr_t OrigFunc;
   fptr_t StubImpl;
@@ -35,9 +35,23 @@ struct InjectionData {
         DetourFunc((fptr_t)DetourFunction), ImplPtr((fptr_t *)ImplPointer) {}
 };
 
+// metadata structure for accessing the syringe boolean flag
+struct SimpleInjectionData {
+  fptr_t OrigFunc; // pointer to syringe site
+  bool *InjectionEnabled; // pointer to runtime controled boolead (controls injection)
+
+  template <typename T>
+  SimpleInjectionData(T OrigFunction, bool *InjectionEnabled)
+      : OrigFunc((fptr_t)OrigFunction), InjectionEnabled(InjectionEnabled) {}
+};
+
+// a struct describing class method pointers for itanium ABI
+// See Itanium ABI for more details
 struct mPtrTy {
-  ptrdiff_t ptr;
-  ptrdiff_t adj;
+  ptrdiff_t ptr; // the pointer value
+                 // for non-virtual methods, this is the
+                 // actual pointer, otherwise its an index into the vtable
+  ptrdiff_t adj; // the adjustment to the pointer
 };
 
 } // namespace __syringe

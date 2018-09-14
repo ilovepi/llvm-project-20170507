@@ -20,17 +20,18 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+// typedef for generic function pointer type to use when casting
+// or manipulating funciton pointers in the runtime.
 typedef void (*fptr_t)(void);
 
+// toggles the current state of injection
 bool toggleImpl(fptr_t OrigFunc);
 
-bool changeImpl(fptr_t OrigFunc, fptr_t NewImpl);
-
+// prints the addresses of syringe metadata, and their values
 void printSyringeData();
 
-void __syringe_register(void *OrigFunc, void *StubImpl, void *DetourFunc,
-                        void **ImplPtr);
+// registers metadata for initialization in the syringe runtime
+void __syringe_register(void *OrigFunc, bool *InjecitonEnabled);
 
 #ifdef __cplusplus
 }
