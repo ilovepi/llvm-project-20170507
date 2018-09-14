@@ -140,12 +140,8 @@ static std::string createSuffixedName(StringRef BaseName, StringRef Suffix) {
   return (BaseName + Suffix).str();
 }
 
-static std::string createStubNameFromBase(StringRef BaseName) {
-  return createSuffixedName(BaseName, SyringeStubImplSuffix);
-}
-
-static std::string createImplPtrNameFromBase(StringRef BaseName) {
-  return createSuffixedName(BaseName, SyringeImplPtrSuffix);
+static std::string createBoolNameFromBase(StringRef BaseName) {
+  return createSuffixedName(BaseName, SyringeBoolSuffix);
 }
 
 static std::string createAliasNameFromBase(StringRef BaseName) {
