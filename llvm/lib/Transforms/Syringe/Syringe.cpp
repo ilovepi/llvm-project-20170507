@@ -92,20 +92,21 @@ static void createCtorInit(Module &M,
 
   for (auto SID : InitData) {
     auto Target = SID.Target;
-    auto Stub = SID.Stub;
-    auto Detour = SID.Detour;
-    auto SyringePtr = SID.SyringePtr;
+    auto Flag = SID.SyringeBool;
 
     // target function types
     auto FuncTy = Target->getType();
+    auto BoolTy = llvm::Type::getInt8PtrTy(M.getContext());
+    // auto BoolTyPtr = static_cast<Type>(BoolTy);
 
     // the parameter types of the registration function
-    Type *ParamTypes[] = {FuncTy, FuncTy, FuncTy, SyringePtr->getType()};
-    auto ParamTypesRef = makeArrayRef(ParamTypes, 4);
+    // Type *ParamTypes[] = {FuncTy, BoolTyPtr};
+    Type *ParamTypes[] = {FuncTy, BoolTy};
+    auto ParamTypesRef = makeArrayRef(ParamTypes, 2);
 
     // actual parameters
-    Value *ParamArgs[] = {Target, Stub, Detour, SyringePtr};
-    auto ParamArgsRef = makeArrayRef(ParamArgs, 4);
+    Value *ParamArgs[] = {Target, Flag};
+    auto ParamArgsRef = makeArrayRef(ParamArgs, 2);
 
     // assert that these are the same size incase we are ever change the
     // implementation
