@@ -75,13 +75,13 @@ struct SimpleSyringeInitData {
 // example ctor function:
 //
 // void ctor_func_name(){
-//      register(original_func, stub_impl, detour_impl, impl_ptr);
-//      register(original_func2, stub_impl2, detour_impl2, impl_ptr2);
+//      register(original_func, orig_func_bool);
+//      register(original_func2, orig_func_bool2);
 //      ....
 // }
 //
 static void createCtorInit(Module &M,
-                           SmallVector<SyringeInitData, 8> &InitData) {
+                           SmallVector<SimpleSyringeInitData, 8> &InitData) {
 
   // create a ctor to register all injection sites
   Function *Ctor = Function::Create(
