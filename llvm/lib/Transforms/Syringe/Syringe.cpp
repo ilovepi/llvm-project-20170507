@@ -58,6 +58,13 @@ struct SyringeInitData {
   GlobalValue *SyringePtr;
 };
 
+struct SimpleSyringeInitData {
+  // the address of the original function, serves as key for runtime lookups
+  Function *Target;
+  // the address of the new stub impl (the moved body of the origianl function)
+  GlobalVariable *SyringeBool;
+};
+
 } // namespace
 
 // create a single ctor function for the module, whose body should consist of a
