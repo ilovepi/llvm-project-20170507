@@ -45,11 +45,8 @@ int main() {
   assert(b.counter == 1);
   assert(b.getCounter() == b.counter);
 
-  // get the member pointer to the target baseclass function
-  mPtrTy *myP = (mPtrTy *)convertMemberPtr(&SyringeBase::increment);
-
   // switch its implementation
-  assert(toggleVirtualImpl(myP, &b) &&
+  assert(toggleVirtualImpl(&SyringeBase::increment, &b) &&
          "SyringeBase::increment() could not be toggled!");
   b.increment(); // other_counter = 1
   b.increment(); // other_counter = 2

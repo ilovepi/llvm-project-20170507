@@ -1,4 +1,4 @@
-PREFIX=~/clang-dev/bin
+PREFIX=$(HOME)/clang-dev/bin
 CC=$(PREFIX)/clang
 CXX=$(PREFIX)/clang++
 OPT=$(PREFIX)/opt
@@ -12,9 +12,10 @@ FLAGS=-fsyringe $(OPTIMIZE) $(DEBUG) $(VERBOSE)
 #OPTIMIZE=-O0
 #VERBOSE=-v
 DEBUG=-g
-LIBS= -lc++abi -I $(HOME)/clang-dev/include/c++/v1  -L $(HOME)/clang-dev/lib
-STD=-stdlib=libc++
-export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
+LIBS=-fuse-ld=$(PREFIX)/ld.lld
+#LIBS=-lc++abi -L $(HOME)/clang-dev/lib -fuse-ld=$(PREFIX)/ld.lld
+#STD=-stdlib=libc++ -nostdinc++ -I $(HOME)/clang-dev/include/c++/v1
+#export LD_LIBRARY_PATH=$(HOME)/clang-dev/lib
 
 .PHONEY: $(TARGETS) test clean opt
 
@@ -41,11 +42,11 @@ test: syringe_test
 opt-test: syringe_test_opt
 	./syringe_test_opt
 
+debug: syringe_test_opt
+	gdb ./syringe_test_opt
+
 syringe_test_opt: main.o syringe.o injection_decl.o
 	$(CXX) main.o syringe.o injection_decl.o  -o syringe_test_opt $(FLAGS) $(LIBS) $(STD)
-
-main.o: main.cpp
-	$(CXX) main.cpp -c $(FLAGS) $(STD)
 
 clean:
 	rm -f $(TARGETS)
