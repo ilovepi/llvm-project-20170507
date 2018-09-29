@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <vector>
 #include <cstdio>
+#include <cassert>
 
 namespace __syringe {
 

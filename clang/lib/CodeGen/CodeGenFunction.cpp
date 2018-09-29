@@ -933,10 +933,13 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
     if (const auto *SyringeAttr = D->getAttr<SyringeInjectionSiteAttr>()) {
       Fn->addFnAttr("syringe-injection-site");
       llvm::errs() << "Annotating Injection site Function: " << *Fn << "\n";
-    } else if (auto TD = D->getAsFunction()->getPrimaryTemplate()) {
-      if (auto SyringeAttr = TD->getAsFunction()->getAttr<SyringeInjectionSiteAttr>()) {
-        Fn->addFnAttr("syringe-injection-site");
-        llvm::errs() << "Annotating Injection site Function: " << *Fn << "\n";
+    } else if (D->getAsFunction()) {
+      if (auto TD = D->getAsFunction()->getPrimaryTemplate()) {
+        if (auto SyringeAttr =
+                TD->getAsFunction()->getAttr<SyringeInjectionSiteAttr>()) {
+          Fn->addFnAttr("syringe-injection-site");
+          llvm::errs() << "Annotating Injection site Function: " << *Fn << "\n";
+        }
       }
     }
 
